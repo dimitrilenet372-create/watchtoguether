@@ -22,7 +22,7 @@ button.ghost{background:var(--card);color:var(--fg);border:1px solid var(--line)
 .empty{display:grid;place-items:center;color:var(--mute);text-align:center;padding:20px}
 #diag{font:11px Consolas,monospace;color:var(--mute);opacity:.8}
 #status{font-size:13px;color:var(--mute);min-height:1.4em}
-body.embed header h1{display:none}
+body.embed header h1,body.embed #joinrow{display:none}
 body.embed header{justify-content:flex-end}
 body.embed{background:#000}
 body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
@@ -34,6 +34,11 @@ body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
     <h1>Watch Together</h1>
     <div class="pill">Salon <b id="room"></b> · <span id="peers">seul</span></div>
   </header>
+  <div class="row" id="joinrow">
+    <input id="joincode" placeholder="Rejoindre un salon : colle ici un lien ou un code" autocomplete="off">
+    <button class="ghost" id="join">Rejoindre</button>
+    <button class="ghost" id="newroom">Nouveau salon</button>
+  </div>
   <div class="row">
     <input id="url" placeholder="Colle un lien YouTube puis clique sur Lancer" autocomplete="off">
     <button id="go">Lancer</button>
@@ -99,6 +104,20 @@ setInterval(() => {
   const ago = lastRecv ? Math.round((Date.now() - lastRecv) / 1000) + " s" : "rien";
   $("diag").textContent = "salon " + room + " · relais " + relay + " · envoi " + sentCode + " · reçu " + ago;
 }, 1000);
+function randomRoom(){
+  const a = crypto.getRandomValues(new Uint8Array(12));
+  return Array.from(a, x => ALPHA[x % ALPHA.length]).join("");
+}
+$("join").onclick = () => {
+  let t = $("joincode").value.trim();
+  const i = t.lastIndexOf("#");
+  if (i >= 0) t = t.slice(i + 1);
+  const code = t.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (code.length !== 12) return say("Code de salon invalide : il fait 12 caractères (ou colle le lien complet).");
+  if (code === room) return say("Tu es déjà dans ce salon.");
+  location.hash = code;               // déclenche le rechargement ci-dessous
+};
+$("newroom").onclick = () => { location.hash = randomRoom(); };
 // Notch change de salon en modifiant seulement #CODE : on recharge pour se reconnecter au nouveau salon
 addEventListener("hashchange", () => {
   const r = location.hash.slice(1).toUpperCase().replace(/[^A-Z0-9]/g, "");
