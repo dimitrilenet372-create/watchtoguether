@@ -48,6 +48,7 @@ body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
   <div class="row">
     <button class="ghost" id="copy">Copier le lien d'invitation</button>
     <button class="ghost" id="sync">Resynchroniser</button>
+    <button class="ghost" id="dbg">Copier le diagnostic</button>
   </div>
   <div id="status"></div>
   <div id="diag"></div>
@@ -74,7 +75,7 @@ function showPeers(){ $("peers").textContent = peers.size ? (peers.size + 1) + "
 function say(t){ $("status").textContent = t; }
 
 // ---- relais ntfy ----
-let lastSend = 0, queue = Promise.resolve(), sentCode = "–", lastRecv = 0, relay = "connexion…", lastType = "–", ytErr = "–";
+let lastSend = 0, queue = Promise.resolve(), sentCode = "–", lastRecv = 0, relay = "connexion…", lastType = "–", ytErr = "–", ytState = "–";
 function send(obj, keepalive){
   queue = queue.then(async () => {
     const wait = 500 - (Date.now() - lastSend);
@@ -103,7 +104,7 @@ es.onmessage = ev => {
 };
 setInterval(() => {
   const ago = lastRecv ? Math.round((Date.now() - lastRecv) / 1000) + " s" : "rien";
-  $("diag").textContent = "v3 · salon " + room + " · relais " + relay + " · envoi " + sentCode + " · reçu " + ago + " (" + lastType + ") · amis " + peers.size + " · lecteur " + (ready ? "prêt" : "non prêt") + " · vidéo " + (vid || "–") + " · erreur YT " + ytErr;
+  $("diag").textContent = "v4 · salon " + room + " · relais " + relay + " · envoi " + sentCode + " · reçu " + ago + " (" + lastType + ") · amis " + peers.size + " · lecteur " + (ready ? "prêt" : "non prêt") + " · vidéo " + (vid || "–") + " · état YT " + ytState + " · erreur YT " + ytErr;
 }, 1000);
 function randomRoom(){
   const a = crypto.getRandomValues(new Uint8Array(12));
@@ -128,10 +129,11 @@ addEventListener("pagehide", () => send({ t: "leave", id: myId }, true));
 
 // ---- lecteur YouTube ----
 let yt = null, ready = false, vid = "", suppressUntil = 0, lastPos = 0, lastAt = 0, lastPlaying = false;
+setTimeout(() => { if (!ready) say("Le lecteur YouTube ne démarre pas : script bloqué (bloqueur de pub, réseau filtré) ou YouTube injoignable."); }, 6000);
 window.onYouTubeIframeAPIReady = () => {
   yt = new YT.Player("player", {
     playerVars: { playsinline: 1, rel: 0, origin: location.origin, widget_referrer: location.href.split("#")[0] },
-    events: { onReady: () => { ready = true; if (pendingState) { const m = pendingState; pendingState = null; applyRemote(m); } }, onStateChange: onYtState,
+    events: { onReady: () => { ready = true; if (pendingState) { const m = pendingState; pendingState = null; applyRemote(m); } }, onStateChange: e => { ytState = e.data; onYtState(e); }, onAutoplayBlocked: () => say("Lecture automatique bloquée par le navigateur : clique sur la vidéo pour la lancer."),
       onError: e => { ytErr = e.data; $("empty").style.display = "grid"; $("empty").innerHTML = "YouTube refuse la lecture ici (code " + e.data + ").<br><a style=\"color:var(--acc)\" target=\"_blank\" rel=\"noopener\" href=\"https://www.youtube.com/watch?v=" + vid + "\">Ouvrir la vidéo sur YouTube</a>"; say("Code " + e.data + " : 101/150 = lecture intégrée interdite par l'auteur, 153 = page non identifiée, 2 = lien invalide."); }
     }
   });
@@ -152,6 +154,19 @@ $("go").onclick = () => {
   suppressUntil = Date.now() + 1500;
   load(id, 0, true);
   setTimeout(broadcast, 1200);
+  say("Chargement de la vidéo " + id + "…");
+  setTimeout(() => {
+    if (!yt || vid !== id) return;
+    const st = yt.getPlayerState();
+    if (st === -1 || st === 5) {
+      $("status").innerHTML = "YouTube n'a pas démarré la lecture (état " + st + "). Clique sur la vidéo, ou <a style=\"color:var(--acc)\" target=\"_blank\" rel=\"noopener\" href=\"https://www.youtube.com/watch?v=" + id + "\">ouvre-la sur YouTube</a>.";
+    }
+  }, 5000);
+};
+$("dbg").onclick = async () => {
+  const txt = $("diag").textContent + "\n" + $("status").textContent + "\n" + navigator.userAgent;
+  try { await navigator.clipboard.writeText(txt); say("Diagnostic copié : colle-le dans le chat."); }
+  catch { say(txt); }
 };
 function snapshot(){
   const playing = yt.getPlayerState() === 1;
