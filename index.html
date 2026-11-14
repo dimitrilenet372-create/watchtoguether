@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Watch Together</title>
 <style>
 :root{--bg:#0e0e10;--card:#1c1c1e;--line:#2c2c2e;--fg:#f5f5f7;--mute:#98989f;--acc:#7aa2ff}
@@ -129,9 +130,9 @@ addEventListener("pagehide", () => send({ t: "leave", id: myId }, true));
 let yt = null, ready = false, vid = "", suppressUntil = 0, lastPos = 0, lastAt = 0, lastPlaying = false;
 window.onYouTubeIframeAPIReady = () => {
   yt = new YT.Player("player", {
-    playerVars: { playsinline: 1, rel: 0, origin: location.origin },
+    playerVars: { playsinline: 1, rel: 0, origin: location.origin, widget_referrer: location.href.split("#")[0] },
     events: { onReady: () => { ready = true; if (pendingState) { const m = pendingState; pendingState = null; applyRemote(m); } }, onStateChange: onYtState,
-      onError: e => { ytErr = e.data; say("Cette vidéo ne peut pas être lue ici (code " + e.data + "). Essaie une autre vidéo."); }
+      onError: e => { ytErr = e.data; $("empty").style.display = "grid"; $("empty").innerHTML = "YouTube refuse la lecture ici (code " + e.data + ").<br><a style=\"color:var(--acc)\" target=\"_blank\" rel=\"noopener\" href=\"https://www.youtube.com/watch?v=" + vid + "\">Ouvrir la vidéo sur YouTube</a>"; say("Code " + e.data + " : 101/150 = lecture intégrée interdite par l'auteur, 153 = page non identifiée, 2 = lien invalide."); }
     }
   });
 };
