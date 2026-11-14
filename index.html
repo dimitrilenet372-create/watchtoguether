@@ -132,6 +132,7 @@ window.onYouTubeIframeAPIReady = () => {
     playerVars: { playsinline: 1, rel: 0, origin: location.origin },
     events: { onReady: () => { ready = true; if (pendingState) { const m = pendingState; pendingState = null; applyRemote(m); } }, onStateChange: onYtState,
       onError: e => { ytErr = e.data; say("Cette vidéo ne peut pas être lue ici (code " + e.data + "). Essaie une autre vidéo."); }
+    }
   });
 };
 function parseId(u){
