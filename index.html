@@ -93,8 +93,9 @@ addEventListener("pagehide", () => send({ t: "leave", id: myId }, true));
 let yt = null, ready = false, vid = "", suppressUntil = 0, lastPos = 0, lastAt = 0, lastPlaying = false;
 window.onYouTubeIframeAPIReady = () => {
   yt = new YT.Player("player", {
-    playerVars: { playsinline: 1, rel: 0 },
-    events: { onReady: () => { ready = true; }, onStateChange: onYtState }
+    playerVars: { playsinline: 1, rel: 0, origin: location.origin },
+    events: { onReady: () => { ready = true; }, onStateChange: onYtState,
+      onError: e => say("Cette vidéo ne peut pas être lue ici (code " + e.data + "). Essaie une autre vidéo.") }
   });
 };
 function parseId(u){
