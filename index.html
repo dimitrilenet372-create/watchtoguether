@@ -21,6 +21,8 @@ button.ghost{background:var(--card);color:var(--fg);border:1px solid var(--line)
 .frame>div,.frame iframe{position:absolute;inset:0;width:100%;height:100%}
 .empty{display:grid;place-items:center;color:var(--mute);text-align:center;padding:20px}
 #status{font-size:13px;color:var(--mute);min-height:1.4em}
+body.embed header,body.embed #copy{display:none}
+body.embed main{padding:0;gap:8px}
 </style>
 </head>
 <body>
@@ -42,6 +44,7 @@ button.ghost{background:var(--card);color:var(--fg);border:1px solid var(--line)
 </main>
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
+if (new URLSearchParams(location.search).has("embed")) document.body.classList.add("embed");
 const SERVER = "https://ntfy.sh";
 const ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const $ = id => document.getElementById(id);
