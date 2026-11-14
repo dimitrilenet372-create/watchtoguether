@@ -52,10 +52,10 @@ body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
   </div>
   <div id="notice" hidden></div>
 </main>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
 if (new URLSearchParams(location.search).has("embed")) document.body.classList.add("embed");
-const SERVER = "https://ntfy.sh";
 const ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const $ = id => document.getElementById(id);
 const myId = Math.random().toString(36).slice(2, 10);
@@ -67,10 +67,9 @@ if (room.length < 8) {
   history.replaceState(null, "", "#" + room);
 }
 $("room").textContent = room.slice(0,4) + "-" + room.slice(4,8) + "-" + room.slice(8);
-const topic = SERVER + "/watchtogether-" + room.toLowerCase();
 
-const peers = new Set();
-function showPeers(){ $("peers").textContent = peers.size ? (peers.size + 1) + " personnes" : "seul"; }
+const conns = new Map();   // connexions directes ouvertes
+function showPeers(){ const n = conns.size; $("peers").textContent = n ? (n + 1) + " personnes" : "seul"; }
 let noticeTimer = null;
 function notice(t){
   const n = $("notice");
@@ -79,43 +78,57 @@ function notice(t){
 }
 function say(t){ console.log("[watch]", t); }   // plus de messages à l'écran
 
-// ---- relais ntfy ----
-let lastSend = 0, queue = Promise.resolve(), sentCode = "–", lastRecv = 0, relay = "connexion…", lastType = "–", ytErr = "–", ytState = "–";
-function send(obj, keepalive){
-  queue = queue.then(async () => {
-    const wait = 500 - (Date.now() - lastSend);
-    if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    lastSend = Date.now();
-    try {
-      const r = await fetch(topic, { method: "POST", body: JSON.stringify(obj), keepalive: !!keepalive });
-      sentCode = r.status;
-      if (!r.ok) notice("Le relais refuse les messages (HTTP " + r.status + (r.status === 429 ? " : limite quotidienne ou trop de messages" : "") + "). La synchro reprendra plus tard.");
-      else notice("");
-    } catch (e) { sentCode = "échec"; notice("Connexion au relais impossible : vérifie ta connexion internet."); }
+// ---- connexion directe entre navigateurs (WebRTC via PeerJS) ----
+// Aucun relais de messages : plus de limite quotidienne. Le serveur PeerJS ne sert qu'à la mise en relation.
+let ytErr = "–", ytState = "–";
+const SLOTS = 6;
+let peer = null, mySlot = -1, scan = null;
+const pid = n => "wtn-" + room.toLowerCase() + "-" + n;
+
+function send(obj){
+  for (const c of conns.values()) { try { if (c.open) c.send(obj); } catch {} }
+}
+function handle(m){
+  if (!m || m.id === myId) return;
+  if (m.t === "hello") broadcast();
+  else if (m.t === "state") applyRemote(m);
+}
+function setup(c){
+  c.on("open", () => {
+    conns.set(c.peer, c); showPeers(); notice("");
+    try { c.send({ t: "hello", id: myId }); if (ready && vid) c.send(snapshot()); } catch {}
+  });
+  c.on("data", handle);
+  c.on("close", () => { if (conns.get(c.peer) === c) conns.delete(c.peer); showPeers(); });
+  c.on("error", () => {});
+}
+function dial(i){
+  if (!peer || i === mySlot || conns.has(pid(i))) return;
+  setup(peer.connect(pid(i), { reliable: true, serialization: "json" }));
+}
+function startPeer(n){
+  if (n >= SLOTS) return notice("Salon complet (" + SLOTS + " personnes maximum).");
+  let opened = false;
+  const p = new Peer(pid(n));
+  p.on("open", () => {
+    opened = true; peer = p; mySlot = n; notice("");
+    for (let i = 0; i < SLOTS; i++) dial(i);
+    clearInterval(scan);
+    scan = setInterval(() => { if (conns.size === 0) for (let i = 0; i < SLOTS; i++) dial(i); }, 6000);
+  });
+  p.on("connection", setup);
+  p.on("disconnected", () => { try { p.reconnect(); } catch {} });
+  p.on("error", err => {
+    if (err.type === "unavailable-id") { try { p.destroy(); } catch {} startPeer(n + 1); }
+    else if (err.type === "peer-unavailable") { /* emplacement vide : normal */ }
+    else if (!opened) {
+      notice("Serveur de mise en relation injoignable, nouvelle tentative…");
+      try { p.destroy(); } catch {}
+      setTimeout(() => startPeer(n), 4000);
+    }
   });
 }
-const es = new EventSource(topic + "/sse");
-let helloSent = false, lastReply = 0, errTimer = null;
-es.onopen = () => {
-  relay = "connecté"; clearTimeout(errTimer); notice("");
-  if (!helloSent) { helloSent = true; send({ t: "hello", id: myId }); }   // une seule fois par chargement
-};
-es.onerror = () => {
-  relay = "reconnexion";
-  clearTimeout(errTimer);
-  errTimer = setTimeout(() => notice("Connexion au relais perdue, nouvelle tentative…"), 8000);
-};
-es.onmessage = ev => {
-  try {
-    const m = JSON.parse(JSON.parse(ev.data).message);
-    if (!m || m.id === myId) return;
-    lastRecv = Date.now(); lastType = m.t + (m.vid ? ":" + String(m.vid).slice(0, 4) : "");
-    if (m.t === "leave") { peers.delete(m.id); showPeers(); return; }
-    peers.add(m.id); showPeers();
-    if (m.t === "hello") { if (Date.now() - lastReply > 3000) { lastReply = Date.now(); broadcast(); } }
-    else if (m.t === "state") applyRemote(m);
-  } catch {}
-};
+startPeer(0);
 
 function randomRoom(){
   const a = crypto.getRandomValues(new Uint8Array(12));
@@ -136,7 +149,7 @@ addEventListener("hashchange", () => {
   const r = location.hash.slice(1).toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (r.length >= 8 && r !== room) location.reload();
 });
-addEventListener("pagehide", () => send({ t: "leave", id: myId }, true));
+addEventListener("pagehide", () => { try { peer && peer.destroy(); } catch {} });
 
 // ---- lecteur YouTube ----
 let yt = null, ready = false, vid = "", suppressUntil = 0, lastPos = 0, lastAt = 0, lastPlaying = false;
