@@ -73,7 +73,7 @@ function showPeers(){ $("peers").textContent = peers.size ? (peers.size + 1) + "
 function say(t){ $("status").textContent = t; }
 
 // ---- relais ntfy ----
-let lastSend = 0, queue = Promise.resolve(), sentCode = "–", lastRecv = 0, relay = "connexion…";
+let lastSend = 0, queue = Promise.resolve(), sentCode = "–", lastRecv = 0, relay = "connexion…", lastType = "–", ytErr = "–";
 function send(obj, keepalive){
   queue = queue.then(async () => {
     const wait = 500 - (Date.now() - lastSend);
@@ -93,7 +93,7 @@ es.onmessage = ev => {
   try {
     const m = JSON.parse(JSON.parse(ev.data).message);
     if (!m || m.id === myId) return;
-    lastRecv = Date.now();
+    lastRecv = Date.now(); lastType = m.t + (m.vid ? ":" + String(m.vid).slice(0, 4) : "");
     if (m.t === "leave") { peers.delete(m.id); showPeers(); return; }
     peers.add(m.id); showPeers();
     if (m.t === "hello") broadcast();
@@ -102,7 +102,7 @@ es.onmessage = ev => {
 };
 setInterval(() => {
   const ago = lastRecv ? Math.round((Date.now() - lastRecv) / 1000) + " s" : "rien";
-  $("diag").textContent = "salon " + room + " · relais " + relay + " · envoi " + sentCode + " · reçu " + ago;
+  $("diag").textContent = "salon " + room + " · relais " + relay + " · envoi " + sentCode + " · reçu " + ago + " (" + lastType + ") · amis " + peers.size + " · lecteur " + (ready ? "prêt" : "non prêt") + " · vidéo " + (vid || "–") + " · erreur YT " + ytErr;
 }, 1000);
 function randomRoom(){
   const a = crypto.getRandomValues(new Uint8Array(12));
@@ -131,7 +131,7 @@ window.onYouTubeIframeAPIReady = () => {
   yt = new YT.Player("player", {
     playerVars: { playsinline: 1, rel: 0, origin: location.origin },
     events: { onReady: () => { ready = true; if (pendingState) { const m = pendingState; pendingState = null; applyRemote(m); } }, onStateChange: onYtState,
-      onError: e => say("Cette vidéo ne peut pas être lue ici (code " + e.data + "). Essaie une autre vidéo.") }
+      onError: e => { ytErr = e.data; say("Cette vidéo ne peut pas être lue ici (code " + e.data + "). Essaie une autre vidéo."); }
   });
 };
 function parseId(u){
