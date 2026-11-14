@@ -103,7 +103,7 @@ es.onmessage = ev => {
 };
 setInterval(() => {
   const ago = lastRecv ? Math.round((Date.now() - lastRecv) / 1000) + " s" : "rien";
-  $("diag").textContent = "salon " + room + " · relais " + relay + " · envoi " + sentCode + " · reçu " + ago + " (" + lastType + ") · amis " + peers.size + " · lecteur " + (ready ? "prêt" : "non prêt") + " · vidéo " + (vid || "–") + " · erreur YT " + ytErr;
+  $("diag").textContent = "v3 · salon " + room + " · relais " + relay + " · envoi " + sentCode + " · reçu " + ago + " (" + lastType + ") · amis " + peers.size + " · lecteur " + (ready ? "prêt" : "non prêt") + " · vidéo " + (vid || "–") + " · erreur YT " + ytErr;
 }, 1000);
 function randomRoom(){
   const a = crypto.getRandomValues(new Uint8Array(12));
