@@ -20,8 +20,9 @@ button.ghost{background:var(--card);color:var(--fg);border:1px solid var(--line)
 .frame{position:relative;aspect-ratio:16/9;background:#000;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
 .frame>div,.frame iframe{position:absolute;inset:0;width:100%;height:100%}
 .empty{display:grid;place-items:center;color:var(--mute);text-align:center;padding:20px}
+#diag{font:11px Consolas,monospace;color:var(--mute);opacity:.8}
 #status{font-size:13px;color:var(--mute);min-height:1.4em}
-body.embed header h1,body.embed #copy{display:none}
+body.embed header h1{display:none}
 body.embed header{justify-content:flex-end}
 body.embed{background:#000}
 body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
@@ -43,6 +44,7 @@ body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
     <button class="ghost" id="sync">Resynchroniser</button>
   </div>
   <div id="status"></div>
+  <div id="diag"></div>
 </main>
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
@@ -66,29 +68,37 @@ function showPeers(){ $("peers").textContent = peers.size ? (peers.size + 1) + "
 function say(t){ $("status").textContent = t; }
 
 // ---- relais ntfy ----
-let lastSend = 0, queue = Promise.resolve();
+let lastSend = 0, queue = Promise.resolve(), sentCode = "–", lastRecv = 0, relay = "connexion…";
 function send(obj, keepalive){
   queue = queue.then(async () => {
     const wait = 500 - (Date.now() - lastSend);
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
     lastSend = Date.now();
-    try { await fetch(topic, { method: "POST", body: JSON.stringify(obj), keepalive: !!keepalive }); }
-    catch { say("Connexion au relais impossible."); }
+    try {
+      const r = await fetch(topic, { method: "POST", body: JSON.stringify(obj), keepalive: !!keepalive });
+      sentCode = r.status;
+      if (!r.ok) say("Le relais a refusé le message (HTTP " + r.status + ").");
+    } catch (e) { sentCode = "échec"; say("Connexion au relais impossible."); }
   });
 }
 const es = new EventSource(topic + "/sse");
-es.onopen = () => { say("Connecté."); send({ t: "hello", id: myId }); };
-es.onerror = () => say("Reconnexion…");
+es.onopen = () => { relay = "connecté"; say("Connecté."); send({ t: "hello", id: myId }); };
+es.onerror = () => { relay = "reconnexion"; say("Reconnexion…"); };
 es.onmessage = ev => {
   try {
     const m = JSON.parse(JSON.parse(ev.data).message);
     if (!m || m.id === myId) return;
+    lastRecv = Date.now();
     if (m.t === "leave") { peers.delete(m.id); showPeers(); return; }
     peers.add(m.id); showPeers();
     if (m.t === "hello") broadcast();
     else if (m.t === "state") applyRemote(m);
   } catch {}
 };
+setInterval(() => {
+  const ago = lastRecv ? Math.round((Date.now() - lastRecv) / 1000) + " s" : "rien";
+  $("diag").textContent = "salon " + room + " · relais " + relay + " · envoi " + sentCode + " · reçu " + ago;
+}, 1000);
 addEventListener("pagehide", () => send({ t: "leave", id: myId }, true));
 
 // ---- lecteur YouTube ----
@@ -151,8 +161,8 @@ function applyRemote(m){
 }
 $("sync").onclick = () => { suppressUntil = 0; broadcast(); say("État envoyé."); };
 $("copy").onclick = async () => {
-  try { await navigator.clipboard.writeText(location.href); say("Lien copié, envoie-le à ton ami."); }
-  catch { prompt("Copie ce lien :", location.href); }
+  try { await navigator.clipboard.writeText(location.origin + location.pathname + "#" + room); say("Lien copié, envoie-le à ton ami."); }
+  catch { say("Lien : " + location.origin + location.pathname + "#" + room); }
 };
 </script>
 </body>
