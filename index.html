@@ -112,7 +112,6 @@ body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
   <div id="notice" hidden></div>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="https://www.youtube.com/iframe_api"></script>
 <script>
 const params = new URLSearchParams(location.search);
 if (params.has("embed")) document.body.classList.add("embed");
@@ -486,7 +485,8 @@ AD.yt = {
   play(){ yt.playVideo(); }, pause(){ yt.pauseVideo(); }, seek(s){ yt.seekTo(s, true); },
   pos(){ return yt.getCurrentTime(); }, playing(){ return yt.getPlayerState() === 1; }
 };
-window.onYouTubeIframeAPIReady = () => {
+function initYT(){
+  if (yt) return;
   yt = new YT.Player("player", {
     playerVars: { playsinline: 1, rel: 0, origin: location.origin, widget_referrer: location.href.split("#")[0] },
     events: {
@@ -499,7 +499,11 @@ window.onYouTubeIframeAPIReady = () => {
       onError: e => { ytErr = e.data; console.log("[watch] erreur YouTube", e.data); toast("YouTube ne peut pas lire cette vidéo ici (code " + e.data + ")."); }
     }
   });
-};
+}
+window.onYouTubeIframeAPIReady = initYT;
+loadScript("https://www.youtube.com/iframe_api", () => {});
+// si la bibliothèque était déjà prête avant que le rappel soit défini (cache), on initialise quand même
+const ytPoll = setInterval(() => { if (yt) clearInterval(ytPoll); else if (window.YT && YT.Player) initYT(); }, 400);
 // SoundCloud (Widget API)
 AD.sc = {
   ready: false, started: false, w: null, wr: false, q: [], p: 0, at: 0, pl: false,
