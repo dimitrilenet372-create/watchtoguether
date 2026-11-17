@@ -6,114 +6,210 @@
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Watch Together</title>
 <style>
-:root{--bg:#0e0e10;--card:#1c1c1e;--line:#2c2c2e;--fg:#f5f5f7;--mute:#98989f;--acc:#7aa2ff}
+:root{--bg:#09090b;--panel:#131316;--card:#1a1a1e;--card2:#222227;--line:#2a2a30;--fg:#f5f5f7;--mute:#9a9aa3;--dim:#6b6b74;--ok:#30d158;--r:14px}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 "Segoe UI",system-ui,sans-serif;display:flex;justify-content:center}
-main{width:100%;max-width:900px;padding:20px 16px 40px;display:flex;flex-direction:column;gap:14px}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-h1{font-size:20px;margin:0}
-.pill{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:13px;color:var(--mute)}
-.pill b{color:var(--fg);font-family:Consolas,monospace;letter-spacing:.04em}
-.row{display:flex;gap:8px}
-input{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:12px;color:var(--fg);padding:11px 14px;font:inherit}
-button{background:var(--acc);color:#0b1020;border:0;border-radius:12px;padding:11px 18px;font:inherit;font-weight:600;cursor:pointer}
-button.ghost{background:var(--card);color:var(--fg);border:1px solid var(--line)}
-.frame{position:relative;aspect-ratio:16/9;background:#000;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
-.frame>div,.frame iframe{position:absolute;inset:0;width:100%;height:100%}
-.empty{display:grid;place-items:center;color:var(--mute);text-align:center;padding:20px}
-#notice{font-size:12.5px;color:#ffb4a8;background:rgba(255,120,100,.1);border:1px solid rgba(255,120,100,.25);border-radius:10px;padding:8px 12px}
-#toast{font-size:12.5px;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;position:sticky;bottom:10px;align-self:center}
-#now{font-size:13px;color:var(--mute);min-height:1.3em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#now b{color:var(--fg);font-weight:600}
-.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-width:0}
-.card h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:0;font-weight:600;display:flex;justify-content:space-between;align-items:center}
-.who{display:flex;align-items:center;gap:10px;min-width:0}
-.dot{width:9px;height:9px;border-radius:50%;background:#55555a;flex:none}
-.dot{background:var(--c,#55555a)}
-.dot.on{background:#3ecf8e;box-shadow:0 0 0 3px rgba(62,207,142,.18)}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+input{font:inherit;color:var(--fg)}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:#2e2e35;border-radius:8px}
+
+.app{max-width:1360px;margin:0 auto;padding:14px 20px 24px;display:flex;flex-direction:column;gap:14px;min-height:100%}
+.top{display:flex;align-items:center;gap:12px;position:relative}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.logo{width:30px;height:30px;border-radius:9px;background:var(--fg);color:#000;display:grid;place-items:center}
+h1{font:600 16px/1 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;margin:0;letter-spacing:-.01em}
+.btn{height:36px;padding:0 14px;border-radius:10px;background:var(--card);border:1px solid var(--line);font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;transition:background .12s,border-color .12s,transform .06s}
+.btn:hover{background:var(--card2);border-color:#3a3a42}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--fg);color:#09090b;border-color:var(--fg)}
+.btn.primary:hover{background:#fff}
+.btn.sm{height:28px;padding:0 10px;font-size:12px;border-radius:8px}
+.btn.icon{width:30px;height:30px;padding:0;justify-content:center;border-radius:8px;font-size:12px}
+#roombtn b{font-family:Consolas,ui-monospace,monospace;letter-spacing:.04em;font-weight:600}
+#roombtn .sep{color:var(--dim)}
+#peers{color:var(--mute);font-weight:500}
+#avatars{display:flex;align-items:center;margin-right:2px}
+.av{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;color:#fff;background:var(--c,#555);flex:none;position:relative;text-transform:uppercase}
+#avatars .av{margin-left:-7px;box-shadow:0 0 0 2px var(--bg)}
+#avatars .av:first-child{margin-left:0}
+.av.off{filter:grayscale(1);opacity:.4}
+.av.more{background:var(--card2);color:var(--mute);font-size:11px}
+
+#roommenu{position:absolute;right:0;top:44px;z-index:35;width:min(360px,calc(100vw - 24px));background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 18px 50px rgba(0,0,0,.6)}
+#roommenu label{font-size:11.5px;color:var(--mute);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.field{display:flex;gap:8px}
+.field input{flex:1;min-width:0;height:36px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:0 12px;outline:none}
+.field input:focus{border-color:#55555f}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;flex:1;min-height:0}
+.stage{display:flex;flex-direction:column;gap:12px;min-width:0}
+.omni{display:flex;align-items:center;gap:8px;height:48px;padding:0 6px 0 14px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);transition:border-color .12s,box-shadow .12s}
+.omni:focus-within{border-color:#5c5c66;box-shadow:0 0 0 4px rgba(255,255,255,.05)}
+.omni svg{flex:none;color:var(--dim)}
+.omni input{flex:1;min-width:0;height:100%;background:none;border:0;outline:none;font-size:14.5px}
+.omni input::placeholder{color:var(--dim)}
+.frame{position:relative;aspect-ratio:16/9;background:#000;border-radius:var(--r);overflow:hidden;border:1px solid var(--line)}
+.frame>div,.frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.frame>#empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:20px;background:radial-gradient(ellipse at 50% 0%,#1d1d24 0%,#0b0b0d 70%)}
+#empty .big{font:600 20px/1.2 "Segoe UI Variable Display","Segoe UI",sans-serif;letter-spacing:-.01em}
+#empty .sub{color:var(--mute);max-width:420px}
+#empty kbd{font:600 12px Consolas,monospace;background:var(--card2);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:2px 7px;color:var(--fg)}
+.svc{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.svc span{font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--card);border:1px solid var(--line);color:var(--mute);display:inline-flex;align-items:center;gap:6px}
+.svc i{width:7px;height:7px;border-radius:50%;background:var(--c)}
+.frame>#flash{inset:auto;left:12px;top:12px;width:auto;height:auto;max-width:calc(100% - 24px);z-index:6;padding:7px 12px;border-radius:999px;background:rgba(15,15,18,.82);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.12);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transform:translateY(-6px);transition:opacity .2s,transform .2s;pointer-events:none}
+.frame>#flash.show{opacity:1;transform:none}
+#flash b{font-weight:600}
+.under{display:flex;align-items:center;gap:12px;min-height:30px}
+#now{flex:1;min-width:0;color:var(--mute);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#now b{color:var(--fg);font-weight:600;font-size:14.5px}
+
+.side{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+.tabs{display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--line)}
+.tab{flex:1;height:32px;border-radius:8px;font-weight:600;font-size:13px;color:var(--mute);display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.tab:hover{color:var(--fg)}
+.tab.on{background:var(--card2);color:var(--fg)}
+.badge{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--fg);color:#000;font-size:11px;font-weight:700;display:inline-grid;place-items:center}
+.pane{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.pane h2{font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--mute);margin:6px 0 0;font-weight:600;display:flex;justify-content:space-between;align-items:center;min-height:24px}
+.pane h2:first-child{margin-top:0}
+.list{display:flex;flex-direction:column;gap:4px}
+.hint{font-size:12.5px;color:var(--dim);line-height:1.5}
+.vi{display:flex;align-items:center;gap:10px;min-width:0;padding:6px;border-radius:10px;transition:background .12s}
+.vi:hover{background:var(--card)}
+.vi img{width:72px;height:40px;object-fit:cover;border-radius:6px;background:#000;flex:none}
+.vi .t{min-width:0;flex:1;font-size:13px}
+.vi .t div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.vi .t small{color:var(--dim);font-size:11.5px}
+.vi .btn{opacity:.55}
+.vi:hover .btn{opacity:1}
+.who{display:flex;align-items:center;gap:10px;min-width:0;padding:6px;border-radius:10px}
+.who .av{width:28px;height:28px;font-size:11px}
+.who .av.on::after{content:"";position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 2px var(--panel)}
 .who .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.who .s{color:var(--mute);font-size:12.5px;margin-left:auto;white-space:nowrap}
-.me .n::after{content:" (toi)";color:var(--mute);font-weight:400}
-.namerow{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--mute)}
-.namerow input{padding:6px 10px;border-radius:9px;font-size:13px}
-.feed{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--mute);max-height:130px;overflow:auto}
+.who .s{color:var(--mute);font-size:12px;margin-left:auto;white-space:nowrap}
+.who.off .n{color:var(--mute)}
+.me .n::after{content:" (toi)";color:var(--dim);font-weight:400}
+.feed{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--mute)}
 .feed b{color:var(--fg);font-weight:600}
-.feed time{opacity:.6;margin-right:6px;font-variant-numeric:tabular-nums}
-.vi{display:flex;align-items:center;gap:10px;min-width:0}
-.vi img{width:64px;height:36px;object-fit:cover;border-radius:6px;background:#000;flex:none}
-.vi .t{min-width:0;flex:1;font-size:13px;overflow:hidden}
-.vi .t div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.vi .t small{color:var(--mute)}
-.vi button{padding:5px 10px;border-radius:8px;font-size:12px}
-.hint{font-size:12.5px;color:var(--mute)}
-#gate{position:fixed;inset:0;z-index:50;background:rgba(8,8,10,.92);backdrop-filter:blur(14px);display:grid;place-items:center;padding:20px}
-#gate form{width:100%;max-width:360px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:26px 22px;display:flex;flex-direction:column;gap:14px;text-align:center}
-#gate h2{margin:0;font-size:20px}
+.feed time{color:var(--dim);margin-right:8px;font-variant-numeric:tabular-nums}
+
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:45;max-width:calc(100vw - 32px);background:var(--fg);color:#09090b;font-weight:600;font-size:13px;padding:9px 16px;border-radius:999px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+#notice{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:45;max-width:calc(100vw - 32px);font-size:12.5px;color:#ffd0c8;background:#3a1512;border:1px solid #6b2a22;border-radius:10px;padding:8px 14px}
+.ver{font-size:11px;color:var(--dim);text-align:center}
+
+#gate{position:fixed;inset:0;z-index:50;background:rgba(6,6,8,.86);backdrop-filter:blur(18px);display:grid;place-items:center;padding:20px}
+#gate form{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:30px 26px 26px;display:flex;flex-direction:column;gap:14px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+#gate .logo{width:44px;height:44px;border-radius:13px;margin:0 auto 2px}
+#gate h2{margin:0;font:600 21px/1.2 "Segoe UI Variable Display","Segoe UI",sans-serif;letter-spacing:-.01em}
 #gate p{margin:0;color:var(--mute);font-size:13.5px}
-#gate input{text-align:center;font-size:16px}
+#gate input{height:46px;text-align:center;font-size:16px;background:var(--card);border:1px solid var(--line);border-radius:12px;outline:none}
+#gate input:focus{border-color:#5c5c66}
+#gate .btn{height:46px;justify-content:center;font-size:14.5px;border-radius:12px}
 #gate .code{font-family:Consolas,monospace;color:var(--fg);letter-spacing:.05em}
-body.locked main{filter:blur(6px);pointer-events:none;user-select:none}
+body.locked .app{filter:blur(8px);pointer-events:none;user-select:none}
 #cursors{position:fixed;inset:0;z-index:40;pointer-events:none;overflow:hidden}
 .cur{position:absolute;left:0;top:0;transition:opacity .25s;will-change:transform}
 #shield{position:fixed;left:0;top:0;width:0;height:0;z-index:30;cursor:default;display:none}
 .cur svg{display:block;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))}
 .cur span{position:absolute;left:13px;top:15px;white-space:nowrap;font:500 12px/16px Inter,"Segoe UI",system-ui,sans-serif;color:#fff;padding:2px 7px 3px;border-radius:2px 8px 8px 8px;box-shadow:0 1px 3px rgba(0,0,0,.35)}
-body.embed header h1,body.embed #joinrow{display:none}
-body.embed header{justify-content:flex-end}
+
+@media (max-width:980px){
+  .layout{grid-template-columns:1fr}
+  .side{min-height:320px}
+  .pane{max-height:420px}
+}
+@media (max-width:560px){
+  .app{padding:10px 10px 18px;gap:10px}
+  h1,#roombtn .lbl,#go .lbl{display:none}
+  .btn{padding:0 11px}
+}
+/* dans le Notch : compact, fond noir, pas de marque */
 body.embed{background:#000}
-body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
+body.embed .app{padding:8px 10px 12px;gap:8px;max-width:none}
+body.embed .brand,body.embed .ver{display:none}
+body.embed .top{justify-content:flex-end}
+body.embed #avatars{margin-right:auto}
 </style>
 </head>
 <body class="locked">
 <div id="gate"><form id="gateform" autocomplete="off">
-  <h2>Watch Together</h2>
-  <p>Choisis le nom que verront les autres dans le salon <span class="code" id="gatecode"></span>.</p>
+  <div class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+  <h2>Comment tu t'appelles ?</h2>
+  <p>Les autres verront ce nom dans le salon <span class="code" id="gatecode"></span>.</p>
   <input id="gname" maxlength="24" placeholder="Ton nom" autocomplete="off">
-  <button id="genter" type="submit">Entrer dans le salon</button>
+  <button id="genter" class="btn primary" type="submit">Entrer dans le salon</button>
 </form></div>
 <div id="shield"></div>
 <div id="cursors"></div>
-<main>
-  <header>
-    <h1>Watch Together</h1>
-    <div class="pill">Salon <b id="room"></b> · <span id="peers">seul</span></div>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="logo"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+      <h1>Watch Together</h1>
+    </div>
+    <div id="avatars" title="Personnes dans le salon"></div>
+    <button class="btn" id="roombtn" title="Changer de salon, changer de nom"><span class="lbl">Salon</span> <b id="room"></b> <span class="sep">·</span> <span id="peers">seul</span>
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 3.5 5 6.5 8 3.5"/></svg></button>
+    <button class="btn primary" id="copy" title="Copier le lien du salon pour l'envoyer à tes amis">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+      <span id="copylbl">Inviter</span></button>
+    <div id="roommenu" hidden>
+      <label for="name">Ton nom</label>
+      <div class="field"><input id="name" maxlength="24" autocomplete="off"></div>
+      <label for="joincode" id="joinrow">Rejoindre un autre salon</label>
+      <div class="field"><input id="joincode" placeholder="Colle un lien ou un code" autocomplete="off"><button class="btn" id="join">Rejoindre</button></div>
+      <button class="btn" id="newroom" style="justify-content:center">Créer un nouveau salon</button>
+    </div>
   </header>
-  <div class="row">
-    <input id="url" placeholder="Colle un lien YouTube, SoundCloud ou Spotify (ou Ctrl+V n'importe où)" autocomplete="off">
-    <button id="go">Lancer</button>
-    <button class="ghost" id="addq" title="Ajouter à la file d'attente">+ File</button>
-  </div>
-  <div class="frame"><div id="w-yt"><div id="player"></div></div><div id="w-sc" style="display:none"></div><div id="w-sp" style="display:none"></div><div id="empty" class="empty">Colle un lien YouTube, SoundCloud ou Spotify ci-dessus, ou choisis un titre dans « Récemment ».<br>Tout le monde dans le salon verra / entendra la même chose, au même moment.</div></div>
-  <div id="now"></div>
-  <div class="row">
-    <button class="ghost" id="copy">Copier le lien d'invitation</button>
-    <button class="ghost" id="sync">Resynchroniser</button>
-  </div>
-  <div class="row" id="joinrow">
-    <input id="joincode" placeholder="Rejoindre un salon : colle ici un lien ou un code" autocomplete="off">
-    <button class="ghost" id="join">Rejoindre</button>
-    <button class="ghost" id="newroom">Nouveau salon</button>
-  </div>
-  <div class="cols">
-    <section class="card">
-      <h2>Dans le salon</h2>
-      <div id="people"></div>
-      <div class="namerow"><label for="name">Ton nom</label><input id="name" maxlength="24" autocomplete="off"></div>
-      <h2>Activité</h2>
-      <div id="feed" class="feed"><span class="hint">Les pauses, lectures et changements de vidéo s'affichent ici.</span></div>
+  <div class="layout">
+    <section class="stage">
+      <div class="omni">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+        <input id="url" placeholder="Colle un lien YouTube, SoundCloud ou Spotify" autocomplete="off">
+        <button class="btn" id="addq" title="Ajouter à la file d'attente">+ File</button>
+        <button class="btn primary" id="go" title="Lancer pour tout le monde"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><span class="lbl">Lancer</span></button>
+      </div>
+      <div class="frame">
+        <div id="w-yt"><div id="player"></div></div><div id="w-sc" style="display:none"></div><div id="w-sp" style="display:none"></div>
+        <div id="empty">
+          <div class="big">Colle un lien pour commencer</div>
+          <div class="sub">Fais <kbd>Ctrl</kbd> + <kbd>V</kbd> n'importe où sur la page. Tout le monde dans le salon verra la même chose, au même moment.</div>
+          <button class="btn primary" id="pastebtn">Coller depuis le presse-papiers</button>
+          <div class="svc"><span><i style="--c:#ff3b30"></i>YouTube</span><span><i style="--c:#ff7700"></i>SoundCloud</span><span><i style="--c:#1ed760"></i>Spotify</span></div>
+        </div>
+        <div id="flash"></div>
+      </div>
+      <div class="under">
+        <div id="now"></div>
+        <button class="btn sm" id="sync" title="Remettre tout le monde au même moment que toi">Resynchroniser</button>
+      </div>
     </section>
-    <section class="card">
-      <h2>File d'attente <button class="ghost" id="clearq" style="padding:3px 9px;font-size:11px">Vider</button></h2>
-      <div id="queue"><span class="hint">Vide. Colle un lien puis « + File » : la vidéo suivante démarre toute seule.</span></div>
-      <h2>Récemment</h2>
-      <div id="history"><span class="hint">Ce que tu lances apparaîtra ici pour le relancer en un clic.</span></div>
-    </section>
+    <aside class="side">
+      <div class="tabs">
+        <button class="tab on" data-pane="p-next">À suivre <span class="badge" id="qcount" hidden>0</span></button>
+        <button class="tab" data-pane="p-room">Salon <span class="badge" id="pcount" hidden>0</span></button>
+      </div>
+      <div class="pane" id="p-next">
+        <h2>File d'attente <button class="btn sm" id="clearq" hidden>Vider</button></h2>
+        <div id="queue"></div>
+        <h2>Récemment lancés</h2>
+        <div id="history"></div>
+      </div>
+      <div class="pane" id="p-room" hidden>
+        <h2>Dans le salon</h2>
+        <div id="people" class="list"></div>
+        <h2>Activité</h2>
+        <div id="feed" class="feed"></div>
+      </div>
+    </aside>
   </div>
-  <div class="hint" style="text-align:center;opacity:.5">Watch Together · version 17.11.5</div>
-  <div id="toast" hidden></div>
-  <div id="notice" hidden></div>
-</main>
+  <div class="ver">Watch Together · version 17.11.6</div>
+</div>
+<div id="toast" hidden></div>
+<div id="notice" hidden></div>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 const params = new URLSearchParams(location.search);
@@ -202,34 +298,49 @@ const feedItems = [];
 function feed(who, text){
   feedItems.unshift({ at: clock(), who, text });
   if (feedItems.length > 40) feedItems.pop();
-  renderFeed();
+  renderFeed(); flash(who, text);
+}
+let flashT = 0;
+function flash(who, text){
+  const f = $("flash"); f.textContent = ""; f.append(el("b", "", who), document.createTextNode(" " + text));
+  f.classList.add("show"); clearTimeout(flashT); flashT = setTimeout(() => f.classList.remove("show"), 3200);
 }
 function renderFeed(){
   const box = $("feed"); box.textContent = "";
-  if (!feedItems.length) { box.append(el("span", "hint", "Les pauses, lectures et changements de vidéo s'affichent ici.")); return; }
-  for (const f of feedItems.slice(0, 12)) {
+  if (!feedItems.length) { box.append(el("span", "hint", "Qui met en pause, relance ou change de titre : tout s'affiche ici.")); return; }
+  for (const f of feedItems.slice(0, 30)) {
     const d = el("div"); d.append(el("time", "", f.at), el("b", "", f.who), document.createTextNode(" " + f.text)); box.append(d);
   }
 }
+const initials = n => { const w = String(n || "?").trim().split(/\s+/); return ((w[0] || "?")[0] + (w.length > 1 ? w[w.length - 1][0] : "")).toUpperCase(); };
+function avatar(name, id, online){
+  const a = el("span", "av" + (online ? " on" : " off"), initials(name)); a.style.setProperty("--c", figmaColor(id)); return a;
+}
 function personRow(name, me, online, status, id){
-  const r = el("div", "who" + (me ? " me" : ""));
-  const d = el("span", "dot" + (online ? " on" : "")); d.style.setProperty("--c", figmaColor(id || myId));
-  r.append(d, el("span", "n", name), el("span", "s", status));
+  const r = el("div", "who" + (me ? " me" : "") + (online ? "" : " off"));
+  r.append(avatar(name, id || myId, online), el("span", "n", name), el("span", "s", status));
   return r;
 }
 function renderPeople(){
   const box = $("people"); box.textContent = "";
+  const avs = $("avatars"); avs.textContent = "";
   const mine = !vid ? "connecté" : (A().ready && A().playing() ? "▶ en lecture" : "⏸ en pause");
   box.append(personRow(myName, true, true, mine, myId));
+  const me = avatar(myName, myId, true); me.title = myName + " (toi)"; avs.append(me);
+  let shown = 1, online = 1;
   for (const [pid_, p] of [...people.entries()].sort((x, y) => (y[1].online - x[1].online) || x[1].name.localeCompare(y[1].name))) {
     let st;
-    if (!p.online) st = "hors ligne · parti à " + new Date(p.leftAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    if (!p.online) st = "parti à " + new Date(p.leftAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
     else if (!p.hasVideo) st = "connecté";
     else st = (p.playing ? "▶ en lecture" : "⏸ en pause") + " · " + fmt(p.pos);
     box.append(personRow(p.name, false, p.online, st, pid_));
+    if (p.online) online++;
+    if (shown < 5) { const a = avatar(p.name, pid_, p.online); a.title = p.name + (p.online ? "" : " (hors ligne)"); avs.append(a); shown++; }
   }
+  if (people.size + 1 > shown) avs.append(el("span", "av more", "+" + (people.size + 1 - shown)));
   const n = conns.size;
   $("peers").textContent = n ? (n + 1) + " personnes" : "seul";
+  const pc = $("pcount"); pc.textContent = online; pc.hidden = online < 2;
 }
 setInterval(renderPeople, 5000);   // garde « ma » ligne à jour si le lecteur change d'état sans événement
 
@@ -277,11 +388,11 @@ function videoRow(id, by, buttons){
   r.append(img, t, ...buttons);
   return r;
 }
-function btn(label, title, fn){ const b = el("button", "ghost", label); b.title = title; b.onclick = fn; return b; }
+function btn(label, title, fn){ const b = el("button", "btn icon", label); b.title = title; b.onclick = fn; return b; }
 function renderHistory(){
   const box = $("history"); box.textContent = "";
-  if (!hist.length) { box.append(el("span", "hint", "Ce que tu lances apparaîtra ici pour le relancer en un clic.")); return; }
-  const list = el("div"); list.style.cssText = "display:flex;flex-direction:column;gap:8px";
+  if (!hist.length) { box.append(el("span", "hint", "Ce que tu lances apparaîtra ici, pour le relancer en un clic.")); return; }
+  const list = el("div", "list");
   for (const id of hist.slice(0, 8)) list.append(videoRow(id, "", [btn("▶", "Lancer pour tout le monde", () => playNow(id)), btn("+", "Ajouter à la file", () => addQueue(id))]));
   box.append(list);
 }
@@ -300,8 +411,9 @@ function addQueue(id){
 }
 function renderQueue(){
   const box = $("queue"); box.textContent = "";
-  if (!queue.length) { box.append(el("span", "hint", "Vide. Colle un lien puis « + File » : la vidéo suivante démarre toute seule.")); return; }
-  const list = el("div"); list.style.cssText = "display:flex;flex-direction:column;gap:8px";
+  const qc = $("qcount"); qc.textContent = queue.length; qc.hidden = !queue.length; $("clearq").hidden = !queue.length;
+  if (!queue.length) { box.append(el("span", "hint", "Rien à suivre. Colle un lien puis « + File » : il démarrera tout seul à la fin du titre en cours.")); return; }
+  const list = el("div", "list");
   queue.forEach((q, i) => list.append(videoRow(q.id, q.by, [
     btn("▶", "Lancer maintenant", () => { setQueue(queue.filter((_, k) => k !== i)); playNow(q.id); }),
     btn("✕", "Retirer de la file", () => setQueue(queue.filter((_, k) => k !== i)))
@@ -707,10 +819,32 @@ function applyRemote(m){
   if (!m.playing && now) ad.pause();
 }
 $("sync").onclick = () => { suppressUntil = 0; broadcast("sync"); toast("État envoyé à tout le monde."); };
+let copyT = 0;
 $("copy").onclick = async () => {
   const link = location.origin + location.pathname + "#" + room;
-  try { await navigator.clipboard.writeText(link); toast("Lien copié : envoie-le à tes amis."); }
-  catch { toast("Lien : " + link); }
+  try {
+    await navigator.clipboard.writeText(link);
+    $("copylbl").textContent = "Lien copié ✓"; clearTimeout(copyT); copyT = setTimeout(() => { $("copylbl").textContent = "Inviter"; }, 2200);
+    toast("Lien du salon copié : envoie-le à tes amis.");
+  } catch { toast("Lien : " + link); }
+};
+// onglets du panneau latéral
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === t));
+  for (const id of ["p-next", "p-room"]) $(id).hidden = id !== t.dataset.pane;
+});
+// menu du salon (nom, rejoindre, nouveau salon)
+$("roombtn").onclick = e => { e.stopPropagation(); $("roommenu").hidden = !$("roommenu").hidden; };
+$("roommenu").onclick = e => e.stopPropagation();
+document.addEventListener("click", () => { $("roommenu").hidden = true; });
+document.addEventListener("keydown", e => { if (e.key === "Escape") $("roommenu").hidden = true; });
+$("joincode").addEventListener("keydown", e => { if (e.key === "Enter") $("join").click(); });
+// bouton « Coller » de l'écran vide
+$("pastebtn").onclick = async () => {
+  try {
+    const id = parseKey(await navigator.clipboard.readText());
+    if (id) playNow(id); else toast("Le presse-papiers ne contient pas de lien YouTube, SoundCloud ou Spotify.");
+  } catch { $("url").focus(); toast("Clique dans la barre puis fais Ctrl+V."); }
 };
 renderPeople(); renderQueue(); renderHistory(); renderFeed();
 setTimeout(() => { if (!AD.yt.ready) notice("Le lecteur YouTube n'a pas chargé. Un bloqueur de pub ou de pisteurs le bloque peut-être : désactive-le pour ce site, puis recharge."); }, 8000);
