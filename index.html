@@ -30,6 +30,7 @@ button.ghost{background:var(--card);color:var(--fg);border:1px solid var(--line)
 .card h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:0;font-weight:600;display:flex;justify-content:space-between;align-items:center}
 .who{display:flex;align-items:center;gap:10px;min-width:0}
 .dot{width:9px;height:9px;border-radius:50%;background:#55555a;flex:none}
+.dot{background:var(--c,#55555a)}
 .dot.on{background:#3ecf8e;box-shadow:0 0 0 3px rgba(62,207,142,.18)}
 .who .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .who .s{color:var(--mute);font-size:12.5px;margin-left:auto;white-space:nowrap}
@@ -46,13 +47,31 @@ button.ghost{background:var(--card);color:var(--fg);border:1px solid var(--line)
 .vi .t small{color:var(--mute)}
 .vi button{padding:5px 10px;border-radius:8px;font-size:12px}
 .hint{font-size:12.5px;color:var(--mute)}
+#gate{position:fixed;inset:0;z-index:50;background:rgba(8,8,10,.92);backdrop-filter:blur(14px);display:grid;place-items:center;padding:20px}
+#gate form{width:100%;max-width:360px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:26px 22px;display:flex;flex-direction:column;gap:14px;text-align:center}
+#gate h2{margin:0;font-size:20px}
+#gate p{margin:0;color:var(--mute);font-size:13.5px}
+#gate input{text-align:center;font-size:16px}
+#gate .code{font-family:Consolas,monospace;color:var(--fg);letter-spacing:.05em}
+body.locked main{filter:blur(6px);pointer-events:none;user-select:none}
+#cursors{position:fixed;inset:0;z-index:40;pointer-events:none;overflow:hidden}
+.cur{position:absolute;left:0;top:0;transition:transform .09s linear,opacity .25s;will-change:transform}
+.cur svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+.cur span{position:absolute;left:12px;top:20px;white-space:nowrap;font-size:11.5px;font-weight:600;color:#fff;padding:2px 8px;border-radius:999px;box-shadow:0 1px 4px rgba(0,0,0,.5)}
 body.embed header h1,body.embed #joinrow{display:none}
 body.embed header{justify-content:flex-end}
 body.embed{background:#000}
 body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
 </style>
 </head>
-<body>
+<body class="locked">
+<div id="gate"><form id="gateform" autocomplete="off">
+  <h2>Watch Together</h2>
+  <p>Choisis le nom que verront les autres dans le salon <span class="code" id="gatecode"></span>.</p>
+  <input id="gname" maxlength="24" placeholder="Ton nom" autocomplete="off">
+  <button id="genter" type="submit">Entrer dans le salon</button>
+</form></div>
+<div id="cursors"></div>
 <main>
   <header>
     <h1>Watch Together</h1>
@@ -136,9 +155,21 @@ if (room.length < 8) {
 }
 $("room").textContent = room.slice(0,4) + "-" + room.slice(4,8) + "-" + room.slice(8);
 
-// ---- identité ----
-let myName = cleanName(store.get("wt-name", "")) || cleanName(params.get("name")) || ("Invité " + myId.slice(0, 3).toUpperCase());
-$("name").value = myName;
+// ---- identité : le nom est obligatoire avant d'entrer dans le salon ----
+let myName = "", entered = false;
+const colorOf = id => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return "hsl(" + (h % 360) + " 80% 62%)"; };
+$("gatecode").textContent = room.slice(0,4) + "-" + room.slice(4,8) + "-" + room.slice(8);
+$("gname").value = cleanName(store.get("wt-name", "")) || cleanName(params.get("name"));
+setTimeout(() => { try { $("gname").focus(); $("gname").select(); } catch {} }, 50);
+$("gateform").onsubmit = e => {
+  e.preventDefault();
+  const n = cleanName($("gname").value);
+  if (!n) { $("gname").focus(); $("gname").style.borderColor = "#ff7b6b"; return; }
+  myName = n; store.set("wt-name", n); $("name").value = n;
+  entered = true; document.body.classList.remove("locked"); $("gate").remove();
+  startPeer(0);
+  renderPeople();
+};
 $("name").onchange = () => {
   myName = cleanName($("name").value) || myName;
   $("name").value = myName;
@@ -176,22 +207,22 @@ function renderFeed(){
     const d = el("div"); d.append(el("time", "", f.at), el("b", "", f.who), document.createTextNode(" " + f.text)); box.append(d);
   }
 }
-function personRow(name, me, online, status){
+function personRow(name, me, online, status, id){
   const r = el("div", "who" + (me ? " me" : ""));
-  r.append(el("span", "dot" + (online ? " on" : "")), el("span", "n", name), el("span", "s", status));
+  const d = el("span", "dot" + (online ? " on" : "")); d.style.setProperty("--c", colorOf(id || myId));
+  r.append(d, el("span", "n", name), el("span", "s", status));
   return r;
 }
 function renderPeople(){
   const box = $("people"); box.textContent = "";
   const mine = !vid ? "connecté" : (A().ready && A().playing() ? "▶ en lecture" : "⏸ en pause");
-  box.append(personRow(myName, true, true, mine));
-  const list = [...people.values()].sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name));
-  for (const p of list) {
+  box.append(personRow(myName, true, true, mine, myId));
+  for (const [pid_, p] of [...people.entries()].sort((x, y) => (y[1].online - x[1].online) || x[1].name.localeCompare(y[1].name))) {
     let st;
     if (!p.online) st = "hors ligne · parti à " + new Date(p.leftAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
     else if (!p.hasVideo) st = "connecté";
     else st = (p.playing ? "▶ en lecture" : "⏸ en pause") + " · " + fmt(p.pos);
-    box.append(personRow(p.name, false, p.online, st));
+    box.append(personRow(p.name, false, p.online, st, pid_));
   }
   const n = conns.size;
   $("peers").textContent = n ? (n + 1) + " personnes" : "seul";
@@ -289,6 +320,47 @@ function onEnded(){
   playNow(next.id);
 }
 
+// ---- curseurs des autres (positions relatives au lecteur) ----
+const curEls = new Map(), curPos = new Map(), curTimers = new Map();
+const frameBox = document.querySelector(".frame");
+function placeCursor(id){
+  const e = curEls.get(id), c = curPos.get(id); if (!e || !c) return;
+  const r = frameBox.getBoundingClientRect();
+  const x = r.left + c.x * r.width, y = r.top + c.y * r.height;
+  const off = x < -20 || y < -20 || x > innerWidth + 20 || y > innerHeight + 20;
+  e.style.opacity = off ? "0" : "1";
+  e.style.transform = "translate(" + Math.round(x) + "px," + Math.round(y) + "px)";
+}
+function showCursor(id, name, x, y){
+  let e = curEls.get(id);
+  if (!e) {
+    e = el("div", "cur");
+    e.innerHTML = '<svg width="18" height="22" viewBox="0 0 18 22"><path d="M1.5 1.2 1.5 17l4.2-3.9 3 6.6 3.2-1.4-3-6.4 5.8-.2z" fill="currentColor" stroke="#000" stroke-opacity=".55" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+    e.append(el("span"));
+    e.style.color = colorOf(id); e.lastChild.style.background = colorOf(id); e.lastChild.style.color = "#10131a";
+    $("cursors").append(e); curEls.set(id, e);
+  }
+  e.lastChild.textContent = name;
+  curPos.set(id, { x, y }); placeCursor(id);
+  clearTimeout(curTimers.get(id)); curTimers.set(id, setTimeout(() => hideCursor(id), 6000));
+}
+function hideCursor(id){
+  const e = curEls.get(id); if (e) e.remove();
+  curEls.delete(id); curPos.delete(id); clearTimeout(curTimers.get(id)); curTimers.delete(id);
+}
+addEventListener("scroll", () => { for (const id of curEls.keys()) placeCursor(id); }, { passive: true });
+addEventListener("resize", () => { for (const id of curEls.keys()) placeCursor(id); });
+let lastCur = 0;
+document.addEventListener("mousemove", e => {
+  if (!entered || !conns.size) return;
+  const now = performance.now(); if (now - lastCur < 40) return; lastCur = now;
+  const r = frameBox.getBoundingClientRect();
+  send({ t: "cur", id: myId, name: myName, x: +((e.clientX - r.left) / r.width).toFixed(4), y: +((e.clientY - r.top) / r.height).toFixed(4) });
+});
+// au-dessus du lecteur, le navigateur ne nous transmet plus la souris : on masque le curseur chez les autres
+frameBox.addEventListener("mouseenter", () => send({ t: "cur", id: myId, off: true }));
+document.documentElement.addEventListener("mouseleave", () => send({ t: "cur", id: myId, off: true }));
+
 // ---- connexion directe entre navigateurs (WebRTC via PeerJS) ----
 let ytErr = "–", ytState = "–";
 const SLOTS = 6;
@@ -317,6 +389,9 @@ function handle(m, c){
     if (m.act === "load" && m.vid) fetchTitle(m.vid).then(t => feed(p.name, "a lancé « " + t + " »"));
     else if (VERBS[m.act]) feed(p.name, VERBS[m.act](m));
     applyRemote(m);
+  } else if (m.t === "cur") {
+    if (m.off) hideCursor(m.id); else if (Number.isFinite(m.x) && Number.isFinite(m.y)) showCursor(m.id, p.name, m.x, m.y);
+    return;
   } else if (m.t === "queue") {
     if (+m.rev > qrev) { queue = sanitizeQueue(m.items); qrev = +m.rev; renderQueue(); }
   }
@@ -332,7 +407,7 @@ function setup(c){
   c.on("close", () => {
     if (conns.get(c.peer) === c) conns.delete(c.peer);
     const pidd = connPerson.get(c.peer), p = pidd && people.get(pidd);
-    if (p && p.online) { p.online = false; p.leftAt = Date.now(); feed(p.name, "a quitté le salon"); }
+    if (p && p.online) { p.online = false; p.leftAt = Date.now(); feed(p.name, "a quitté le salon"); hideCursor(pidd); }
     renderPeople();
   });
   c.on("error", () => {});
@@ -363,7 +438,6 @@ function startPeer(n){
     }
   });
 }
-startPeer(0);
 
 function randomRoom(){
   const a = crypto.getRandomValues(new Uint8Array(12));
@@ -526,6 +600,7 @@ $("addq").onclick = () => {
 $("url").addEventListener("keydown", e => { if (e.key === "Enter") $("go").click(); });
 // Ctrl+V n'importe où : lance si rien ne joue, sinon ajoute à la file
 document.addEventListener("paste", e => {
+  if (!entered) return;
   const t = e.target;
   if (t && (t.id === "joincode" || t.id === "name")) return;
   const id = parseKey(e.clipboardData && e.clipboardData.getData("text"));
