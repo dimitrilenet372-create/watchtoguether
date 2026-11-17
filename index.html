@@ -56,7 +56,7 @@ button.ghost{background:var(--card);color:var(--fg);border:1px solid var(--line)
 body.locked main{filter:blur(6px);pointer-events:none;user-select:none}
 #cursors{position:fixed;inset:0;z-index:40;pointer-events:none;overflow:hidden}
 .cur{position:absolute;left:0;top:0;transition:opacity .25s;will-change:transform}
-#shield{position:absolute;left:0;right:0;top:0;bottom:52px;width:auto;height:auto;z-index:5;cursor:default;display:none}
+#shield{position:fixed;left:0;top:0;width:0;height:0;z-index:30;cursor:default;display:none}
 .cur svg{display:block;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))}
 .cur span{position:absolute;left:13px;top:15px;white-space:nowrap;font:500 12px/16px Inter,"Segoe UI",system-ui,sans-serif;color:#fff;padding:2px 7px 3px;border-radius:2px 8px 8px 8px;box-shadow:0 1px 3px rgba(0,0,0,.35)}
 body.embed header h1,body.embed #joinrow{display:none}
@@ -72,6 +72,7 @@ body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
   <input id="gname" maxlength="24" placeholder="Ton nom" autocomplete="off">
   <button id="genter" type="submit">Entrer dans le salon</button>
 </form></div>
+<div id="shield"></div>
 <div id="cursors"></div>
 <main>
   <header>
@@ -83,7 +84,7 @@ body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
     <button id="go">Lancer</button>
     <button class="ghost" id="addq" title="Ajouter à la file d'attente">+ File</button>
   </div>
-  <div class="frame"><div id="w-yt"><div id="player"></div></div><div id="w-sc" style="display:none"></div><div id="w-sp" style="display:none"></div><div id="shield"></div><div id="empty" class="empty">Colle un lien YouTube, SoundCloud ou Spotify ci-dessus, ou choisis un titre dans « Récemment ».<br>Tout le monde dans le salon verra / entendra la même chose, au même moment.</div></div>
+  <div class="frame"><div id="w-yt"><div id="player"></div></div><div id="w-sc" style="display:none"></div><div id="w-sp" style="display:none"></div><div id="empty" class="empty">Colle un lien YouTube, SoundCloud ou Spotify ci-dessus, ou choisis un titre dans « Récemment ».<br>Tout le monde dans le salon verra / entendra la même chose, au même moment.</div></div>
   <div id="now"></div>
   <div class="row">
     <button class="ghost" id="copy">Copier le lien d'invitation</button>
@@ -109,7 +110,7 @@ body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
       <div id="history"><span class="hint">Ce que tu lances apparaîtra ici pour le relancer en un clic.</span></div>
     </section>
   </div>
-  <div class="hint" style="text-align:center;opacity:.5">Watch Together · version 17.11.4</div>
+  <div class="hint" style="text-align:center;opacity:.5">Watch Together · version 17.11.5</div>
   <div id="toast" hidden></div>
   <div id="notice" hidden></div>
 </main>
@@ -385,7 +386,19 @@ const shield = $("shield");
 shield.addEventListener("mousemove", trackMouse, { passive: true });
 shield.addEventListener("mouseleave", () => send({ t: "cur", id: myId, off: true }));
 shield.addEventListener("click", () => { if (vid && kindOf(vid) === "yt" && A().ready) { A().playing() ? A().pause() : A().play(); } });
-function syncShield(){ shield.style.display = vid && kindOf(vid) === "yt" ? "block" : "none"; }
+// le voile est posé sur la page (pas dans le cadre) et recalé sur la vidéo, pour qu'aucun empilement du navigateur ne le passe sous le lecteur
+function syncShield(){
+  const on = vid && kindOf(vid) === "yt";
+  shield.style.display = on ? "block" : "none";
+  if (!on) return;
+  const r = frameBox.getBoundingClientRect();
+  shield.style.left = r.left + "px"; shield.style.top = r.top + "px";
+  shield.style.width = r.width + "px"; shield.style.height = Math.max(0, r.height - 52) + "px";
+}
+addEventListener("scroll", syncShield, { passive: true });
+addEventListener("resize", syncShield);
+try { new ResizeObserver(syncShield).observe(frameBox); } catch {}
+setInterval(syncShield, 700);
 // SoundCloud / Spotify : le lecteur occupe tout le cadre, la souris n'est pas visible → on masque notre curseur chez les autres
 frameBox.addEventListener("mouseenter", () => { if (!(vid && kindOf(vid) === "yt")) send({ t: "cur", id: myId, off: true }); });
 document.documentElement.addEventListener("mouseleave", () => send({ t: "cur", id: myId, off: true }));
