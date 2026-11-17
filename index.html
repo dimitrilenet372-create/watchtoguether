@@ -91,6 +91,10 @@ h1{font:600 16px/1 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;m
 .who .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .who .s{color:var(--mute);font-size:12px;margin-left:auto;white-space:nowrap}
 .who.off .n{color:var(--mute)}
+.who .kick{display:none;height:24px;padding:0 9px;font-size:11.5px;border-radius:7px;color:#ff6961;border-color:#5a2622;background:#2a1513}
+.who .kick:hover{background:#3a1a17}
+body.admin .who .kick{display:inline-flex}
+.who .s+.kick{margin-left:8px}
 .me .n::after{content:" (toi)";color:var(--dim);font-weight:400}
 .feed{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--mute)}
 .feed b{color:var(--fg);font-weight:600}
@@ -100,14 +104,14 @@ h1{font:600 16px/1 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;m
 #notice{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:45;max-width:calc(100vw - 32px);font-size:12.5px;color:#ffd0c8;background:#3a1512;border:1px solid #6b2a22;border-radius:10px;padding:8px 14px}
 .ver{font-size:11px;color:var(--dim);text-align:center}
 
-#gate{position:fixed;inset:0;z-index:50;background:rgba(6,6,8,.86);backdrop-filter:blur(18px);display:grid;place-items:center;padding:20px}
-#gate form{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:30px 26px 26px;display:flex;flex-direction:column;gap:14px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+#gate,#kicked{position:fixed;inset:0;z-index:50;background:rgba(6,6,8,.86);backdrop-filter:blur(18px);display:grid;place-items:center;padding:20px}
+#gate form,#kicked>div{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:30px 26px 26px;display:flex;flex-direction:column;gap:14px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.6)}
 #gate .logo{width:44px;height:44px;border-radius:13px;margin:0 auto 2px}
-#gate h2{margin:0;font:600 21px/1.2 "Segoe UI Variable Display","Segoe UI",sans-serif;letter-spacing:-.01em}
-#gate p{margin:0;color:var(--mute);font-size:13.5px}
+#gate h2,#kicked h2{margin:0;font:600 21px/1.2 "Segoe UI Variable Display","Segoe UI",sans-serif;letter-spacing:-.01em}
+#gate p,#kicked p{margin:0;color:var(--mute);font-size:13.5px}
 #gate input{height:46px;text-align:center;font-size:16px;background:var(--card);border:1px solid var(--line);border-radius:12px;outline:none}
 #gate input:focus{border-color:#5c5c66}
-#gate .btn{height:46px;justify-content:center;font-size:14.5px;border-radius:12px}
+#gate .btn,#kicked .btn{height:46px;justify-content:center;font-size:14.5px;border-radius:12px}
 #gate .code{font-family:Consolas,monospace;color:var(--fg);letter-spacing:.05em}
 body.locked .app{filter:blur(8px);pointer-events:none;user-select:none}
 #cursors{position:fixed;inset:0;z-index:40;pointer-events:none;overflow:hidden}
@@ -142,6 +146,11 @@ body.embed #avatars{margin-right:auto}
   <input id="gname" maxlength="24" placeholder="Ton nom" autocomplete="off">
   <button id="genter" class="btn primary" type="submit">Entrer dans le salon</button>
 </form></div>
+<div id="kicked" hidden><div>
+  <h2>Tu as été exclu du salon</h2>
+  <p>L'hôte t'a retiré de ce salon. Tu peux en créer un nouveau.</p>
+  <button class="btn primary" id="kickednew">Créer un nouveau salon</button>
+</div></div>
 <div id="shield"></div>
 <div id="cursors"></div>
 <div class="app">
@@ -206,7 +215,7 @@ body.embed #avatars{margin-right:auto}
       </div>
     </aside>
   </div>
-  <div class="ver">Watch Together · version 17.11.6</div>
+  <div class="ver">Watch Together · version 17.11.7</div>
 </div>
 <div id="toast" hidden></div>
 <div id="notice" hidden></div>
@@ -261,8 +270,15 @@ const colorOf = id => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch
 $("gatecode").textContent = room.slice(0,4) + "-" + room.slice(4,8) + "-" + room.slice(8);
 $("gname").value = cleanName(store.get("wt-name", "")) || cleanName(params.get("name"));
 setTimeout(() => { try { $("gname").focus(); $("gname").select(); } catch {} }, 50);
+function showKicked(){
+  entered = false; const g = $("gate"); if (g) g.hidden = true;
+  document.body.classList.add("locked"); $("kicked").hidden = false;
+}
+$("kickednew").onclick = () => { location.hash = randomRoom(); };
+if (store.get("wt-ban-" + room, 0)) showKicked();
 $("gateform").onsubmit = e => {
   e.preventDefault();
+  if (store.get("wt-ban-" + room, 0)) return showKicked();
   const n = cleanName($("gname").value);
   if (!n) { $("gname").focus(); $("gname").style.borderColor = "#ff7b6b"; return; }
   myName = n; store.set("wt-name", n); $("name").value = n;
@@ -283,6 +299,42 @@ function notice(t){ const n = $("notice"); if (!t) { n.hidden = true; return; } 
 let toastT = null;
 function toast(t){ const n = $("toast"); n.textContent = t; n.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { n.hidden = true; }, 2600); }
 function say(t){ console.log("[watch]", t); }
+
+// ---- exclusion (réservée à l'hôte : l'ordre est signé par une clé que seul son Notch possède) ----
+const ADMIN_PUB = {"kty":"EC","crv":"P-256","x":"IUA4rdnT7kkTpWG75GwVb49q9RiJT2dzP6Z8iI6XeiY","y":"FMAacSo0vbgu9FO-EgAsmtJ5MRtZLrNOcrvwzPxwvK0"};
+const EC = { name: "ECDSA", namedCurve: "P-256" }, SIG = { name: "ECDSA", hash: "SHA-256" };
+let adminKey = null, kickArm = null, kickArmT = 0;
+const kickBytes = target => new TextEncoder().encode("kick|" + room + "|" + target);
+const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = str => Uint8Array.from(atob(str), ch => ch.charCodeAt(0));
+async function kick(target){
+  if (!adminKey) return;
+  try {
+    const sig = b64(await crypto.subtle.sign(SIG, adminKey, kickBytes(target)));
+    send({ t: "kick", id: myId, target, sig });
+    removeKicked(target);
+  } catch { toast("Exclusion impossible."); }
+}
+function removeKicked(target){
+  const p = people.get(target); if (!p) return;
+  const was = p.online; p.online = false; p.leftAt = Date.now();
+  if (was) feed(p.name, "a été exclu du salon");
+  hideCursor(target);
+  setTimeout(() => { for (const [peerId, pe] of connPerson) if (pe === target) { const c = conns.get(peerId); try { c && c.close(); } catch {} conns.delete(peerId); } renderPeople(); }, 400);
+  renderPeople();
+}
+async function onKick(m){
+  try {
+    if (typeof m.target !== "string" || typeof m.sig !== "string") return;
+    const pub = await crypto.subtle.importKey("jwk", ADMIN_PUB, EC, false, ["verify"]);
+    if (!await crypto.subtle.verify(SIG, pub, unb64(m.sig), kickBytes(m.target))) return;
+    if (m.target !== myId) return removeKicked(m.target);
+    store.set("wt-ban-" + room, 1);
+    clearInterval(scan); try { peer && peer.destroy(); } catch {}
+    conns.clear(); try { if (vid) A().pause(); } catch {}
+    showKicked();
+  } catch {}
+}
 
 // ---- participants & activité ----
 const conns = new Map();       // connexions directes ouvertes (clé : id PeerJS)
@@ -319,6 +371,15 @@ function avatar(name, id, online){
 function personRow(name, me, online, status, id){
   const r = el("div", "who" + (me ? " me" : "") + (online ? "" : " off"));
   r.append(avatar(name, id || myId, online), el("span", "n", name), el("span", "s", status));
+  if (!me && online && adminKey) {
+    const armed = kickArm === id;
+    const k = el("button", "btn kick", armed ? "Confirmer ?" : "Exclure"); k.title = "Retirer cette personne du salon";
+    k.onclick = () => {
+      if (kickArm !== id) { kickArm = id; clearTimeout(kickArmT); kickArmT = setTimeout(() => { kickArm = null; renderPeople(); }, 3000); renderPeople(); }
+      else { kickArm = null; kick(id); }
+    };
+    r.append(k);
+  }
   return r;
 }
 function renderPeople(){
@@ -526,6 +587,7 @@ function helloMsg(){ return { t: "hello", id: myId, name: myName, slot: mySlot }
 const VERBS = { play: () => "a relancé la lecture", pause: m => "a mis en pause · " + fmt(m.pos), seek: m => "a déplacé la lecture à " + fmt(m.pos) };
 function handle(m, c){
   if (!m || typeof m !== "object" || m.id === myId) return;
+  if (m.t === "kick") { onKick(m); return; }
   if (m.t === "cur") {   // chemin rapide : pas de recalcul de la liste des participants
     if (m.off) hideCursor(m.id);
     else if (Number.isFinite(m.x) && Number.isFinite(m.y)) { const q = people.get(m.id); showCursor(m.id, (q && q.name) || cleanName(m.name) || "Invité", m.x, m.y); }
@@ -847,6 +909,13 @@ $("pastebtn").onclick = async () => {
   } catch { $("url").focus(); toast("Clique dans la barre puis fais Ctrl+V."); }
 };
 renderPeople(); renderQueue(); renderHistory(); renderFeed();
+(async () => {   // le Notch de l'hôte fournit la clé d'exclusion
+  try {
+    if (typeof window.__wtAdmin !== "string") return;
+    adminKey = await crypto.subtle.importKey("pkcs8", unb64(window.__wtAdmin), EC, false, ["sign"]);
+    document.body.classList.add("admin"); renderPeople();
+  } catch { adminKey = null; }
+})();
 setTimeout(() => { if (!AD.yt.ready) notice("Le lecteur YouTube n'a pas chargé. Un bloqueur de pub ou de pisteurs le bloque peut-être : désactive-le pour ce site, puis recharge."); }, 8000);
 </script>
 </body>
