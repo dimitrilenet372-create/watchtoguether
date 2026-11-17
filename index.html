@@ -64,11 +64,11 @@ body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
     <button class="ghost" id="newroom">Nouveau salon</button>
   </div>
   <div class="row">
-    <input id="url" placeholder="Colle un lien YouTube (ou fais Ctrl+V n'importe où sur la page)" autocomplete="off">
+    <input id="url" placeholder="Colle un lien YouTube, SoundCloud ou Spotify (ou Ctrl+V n'importe où)" autocomplete="off">
     <button id="go">Lancer</button>
     <button class="ghost" id="addq" title="Ajouter à la file d'attente">+ File</button>
   </div>
-  <div class="frame"><div id="player"></div><div id="empty" class="empty">Colle un lien YouTube ci-dessus, ou choisis une vidéo dans « Récemment ».<br>Tout le monde dans le salon verra la même vidéo, au même moment.</div></div>
+  <div class="frame"><div id="w-yt"><div id="player"></div></div><div id="w-sc" style="display:none"></div><div id="w-sp" style="display:none"></div><div id="empty" class="empty">Colle un lien YouTube, SoundCloud ou Spotify ci-dessus, ou choisis un titre dans « Récemment ».<br>Tout le monde dans le salon verra / entendra la même chose, au même moment.</div></div>
   <div id="now"></div>
   <div class="row">
     <button class="ghost" id="copy">Copier le lien d'invitation</button>
@@ -86,7 +86,7 @@ body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
       <h2>File d'attente <button class="ghost" id="clearq" style="padding:3px 9px;font-size:11px">Vider</button></h2>
       <div id="queue"><span class="hint">Vide. Colle un lien puis « + File » : la vidéo suivante démarre toute seule.</span></div>
       <h2>Récemment</h2>
-      <div id="history"><span class="hint">Les vidéos que tu lances apparaîtront ici pour les relancer en un clic.</span></div>
+      <div id="history"><span class="hint">Ce que tu lances apparaîtra ici pour le relancer en un clic.</span></div>
     </section>
   </div>
   <div id="toast" hidden></div>
@@ -108,6 +108,25 @@ function el(tag, cls, text){ const e = document.createElement(tag); if (cls) e.c
 const fmt = s => { s = Math.max(0, Math.round(s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
 const clock = () => new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 const cleanName = n => String(n || "").trim().slice(0, 24);
+// Une « clé » identifie un média : id YouTube brut (11 car.), "sc:<url SoundCloud>" ou "sp:<type>/<id Spotify>"
+const kindOf = k => String(k).startsWith("sc:") ? "sc" : String(k).startsWith("sp:") ? "sp" : "yt";
+function validKey(k){
+  k = String(k || "");
+  return /^[A-Za-z0-9_-]{11}$/.test(k)
+    || /^sc:https:\/\/(on\.|www\.)?soundcloud\.com\/[\w\-./%]{2,200}$/.test(k)
+    || /^sp:(track|episode|album|playlist|show)\/[A-Za-z0-9]{22}$/.test(k);
+}
+function parseKey(u){
+  u = String(u || "").trim();
+  let m = u.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/)([A-Za-z0-9_-]{11})/);
+  if (m) return m[1];
+  m = u.match(/^https?:\/\/(?:www\.|m\.)?(soundcloud\.com\/[\w\-./%]+|on\.soundcloud\.com\/[\w\-./%]+)/i);
+  if (m) return "sc:https://" + m[1].replace(/\/$/, "");
+  m = u.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?(track|episode|album|playlist|show)\/([A-Za-z0-9]{22})/) || u.match(/^spotify:(track|episode|album|playlist|show):([A-Za-z0-9]{22})$/);
+  if (m) return "sp:" + m[1] + "/" + m[2];
+  return /^[A-Za-z0-9_-]{11}$/.test(u) ? u : "";
+}
+const srcLabel = k => ({ sc: "SoundCloud", sp: "Spotify", yt: "" })[kindOf(k)];
 
 let room = location.hash.slice(1).toUpperCase().replace(/[^A-Z0-9]/g, "");
 if (room.length < 8) {
@@ -164,7 +183,7 @@ function personRow(name, me, online, status){
 }
 function renderPeople(){
   const box = $("people"); box.textContent = "";
-  const mine = !vid ? "connecté" : (yt && ready && yt.getPlayerState && yt.getPlayerState() === 1 ? "▶ en lecture" : "⏸ en pause");
+  const mine = !vid ? "connecté" : (A().ready && A().playing() ? "▶ en lecture" : "⏸ en pause");
   box.append(personRow(myName, true, true, mine));
   const list = [...people.values()].sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name));
   for (const p of list) {
@@ -181,39 +200,52 @@ setInterval(renderPeople, 5000);   // garde « ma » ligne à jour si le lecteur
 
 // ---- titres, miniatures, historique ----
 const titles = store.get("wt-titles", {});
-async function fetchTitle(id){
-  if (titles[id]) return titles[id];
-  const watch = "https://www.youtube.com/watch?v=" + id;
-  const urls = ["https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent(watch), "https://noembed.com/embed?url=" + encodeURIComponent(watch)];
-  for (const u of urls) {
+const thumbs = store.get("wt-thumbs", {});
+function oembedUrls(k){
+  const kd = kindOf(k);
+  if (kd === "sc") { const u = k.slice(3); return ["https://soundcloud.com/oembed?format=json&url=" + encodeURIComponent(u), "https://noembed.com/embed?url=" + encodeURIComponent(u)]; }
+  if (kd === "sp") { const u = "https://open.spotify.com/" + k.slice(3); return ["https://open.spotify.com/oembed?url=" + encodeURIComponent(u), "https://noembed.com/embed?url=" + encodeURIComponent(u)]; }
+  const w = "https://www.youtube.com/watch?v=" + k;
+  return ["https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent(w), "https://noembed.com/embed?url=" + encodeURIComponent(w)];
+}
+async function fetchTitle(k){
+  if (titles[k]) return titles[k];
+  for (const u of oembedUrls(k)) {
     try {
       const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 4000);
       const r = await fetch(u, { signal: ctl.signal }); clearTimeout(t);
       if (!r.ok) continue;
       const j = await r.json();
-      if (j && j.title) { titles[id] = String(j.title).slice(0, 140); store.set("wt-titles", titles); return titles[id]; }
+      if (j && j.title) {
+        titles[k] = String(j.title).slice(0, 140); store.set("wt-titles", titles);
+        if (kindOf(k) !== "yt" && typeof j.thumbnail_url === "string" && j.thumbnail_url.startsWith("https://")) { thumbs[k] = j.thumbnail_url; store.set("wt-thumbs", thumbs); }
+        return titles[k];
+      }
     } catch {}
   }
-  return "Vidéo " + id;
+  return kindOf(k) === "yt" ? "Vidéo " + k : (srcLabel(k) + " : titre");
 }
-const thumb = id => "https://i.ytimg.com/vi/" + id + "/mqdefault.jpg";
-let hist = store.get("wt-history", []).filter(i => /^[A-Za-z0-9_-]{11}$/.test(i)).slice(0, 12);
+const thumb = k => kindOf(k) === "yt" ? "https://i.ytimg.com/vi/" + k + "/mqdefault.jpg" : (thumbs[k] || "");
+let hist = store.get("wt-history", []).filter(validKey).slice(0, 12);
 function remember(id){
   hist = [id, ...hist.filter(x => x !== id)].slice(0, 12);
   store.set("wt-history", hist); renderHistory();
 }
 function videoRow(id, by, buttons){
-  const r = el("div", "vi"); const img = el("img"); img.src = thumb(id); img.alt = ""; img.loading = "lazy";
+  const r = el("div", "vi"); const img = el("img"); img.alt = ""; img.loading = "lazy";
+  const setThumb = () => { const u = thumb(id); if (u) { img.src = u; img.style.visibility = "visible"; } else img.style.visibility = "hidden"; };
+  setThumb();
   const t = el("div", "t"); const ti = el("div", "", titles[id] || "Chargement…"); t.append(ti);
-  if (!titles[id]) fetchTitle(id).then(x => { ti.textContent = x; });
-  if (by) t.append(el("small", "", "ajouté par " + by));
+  if (!titles[id]) fetchTitle(id).then(x => { ti.textContent = x; setThumb(); });
+  const meta = [srcLabel(id), by ? "ajouté par " + by : ""].filter(Boolean).join(" · ");
+  if (meta) t.append(el("small", "", meta));
   r.append(img, t, ...buttons);
   return r;
 }
 function btn(label, title, fn){ const b = el("button", "ghost", label); b.title = title; b.onclick = fn; return b; }
 function renderHistory(){
   const box = $("history"); box.textContent = "";
-  if (!hist.length) { box.append(el("span", "hint", "Les vidéos que tu lances apparaîtront ici pour les relancer en un clic.")); return; }
+  if (!hist.length) { box.append(el("span", "hint", "Ce que tu lances apparaîtra ici pour le relancer en un clic.")); return; }
   const list = el("div"); list.style.cssText = "display:flex;flex-direction:column;gap:8px";
   for (const id of hist.slice(0, 8)) list.append(videoRow(id, "", [btn("▶", "Lancer pour tout le monde", () => playNow(id)), btn("+", "Ajouter à la file", () => addQueue(id))]));
   box.append(list);
@@ -243,7 +275,7 @@ function renderQueue(){
 }
 $("clearq").onclick = () => setQueue([]);
 function sanitizeQueue(items){
-  return (Array.isArray(items) ? items : []).filter(q => q && /^[A-Za-z0-9_-]{11}$/.test(q.id)).slice(0, 50).map(q => ({ id: q.id, by: cleanName(q.by) }));
+  return (Array.isArray(items) ? items : []).filter(q => q && validKey(q.id)).slice(0, 50).map(q => ({ id: q.id, by: cleanName(q.by) }));
 }
 function isLeader(){   // un seul navigateur enchaîne la vidéo suivante : celui qui a le plus petit emplacement
   let min = mySlot < 0 ? 99 : mySlot;
@@ -293,7 +325,7 @@ function handle(m, c){
 function setup(c){
   c.on("open", () => {
     conns.set(c.peer, c); notice("");
-    try { c.send(helloMsg()); if (ready && vid) c.send(snapshot("sync")); } catch {}
+    try { c.send(helloMsg()); if (vid && A().ready) c.send(snapshot("sync")); } catch {}
     renderPeople();
   });
   c.on("data", d => handle(d, c));
@@ -353,109 +385,196 @@ addEventListener("hashchange", () => {
 });
 addEventListener("pagehide", () => { try { peer && peer.destroy(); } catch {} });
 
-// ---- lecteur YouTube ----
-let yt = null, ready = false, vid = "", suppressUntil = 0, lastPos = 0, lastAt = 0, lastPlaying = false, pendingState = null;
+// ---- lecteurs (YouTube, SoundCloud, Spotify) ----
+let yt = null, ready = false, vid = "", cur = "yt", suppressUntil = 0, lastPos = 0, lastAt = 0, lastPlaying = false, pendingState = null, spWarned = false;
+const AD = {};
+const A = () => AD[cur];
+function loadScript(src, ok){
+  const sc = document.createElement("script"); sc.src = src; sc.async = true; sc.onload = ok;
+  sc.onerror = () => toast("Impossible de charger le lecteur (" + new URL(src).hostname + ").");
+  document.head.append(sc);
+}
+function flushPending(){
+  if (!pendingState) return;
+  const m = pendingState, k = validKey(m.vid) ? m.vid : (vid || "");
+  if (AD[kindOf(k)].ready) { pendingState = null; applyRemote(m); }
+}
+function showKind(kind){
+  for (const k of ["yt", "sc", "sp"]) $("w-" + k).style.display = k === kind ? "" : "none";
+}
+// YouTube
+AD.yt = {
+  ready: false, ensure(){},
+  load(k, pos, auto){ if (auto) yt.loadVideoById(k, pos); else yt.cueVideoById(k, pos); },
+  play(){ yt.playVideo(); }, pause(){ yt.pauseVideo(); }, seek(s){ yt.seekTo(s, true); },
+  pos(){ return yt.getCurrentTime(); }, playing(){ return yt.getPlayerState() === 1; }
+};
 window.onYouTubeIframeAPIReady = () => {
   yt = new YT.Player("player", {
     playerVars: { playsinline: 1, rel: 0, origin: location.origin, widget_referrer: location.href.split("#")[0] },
     events: {
-      onReady: () => { ready = true; if (pendingState) { const m = pendingState; pendingState = null; applyRemote(m); } },
-      onStateChange: e => { ytState = e.data; onYtState(e); },
+      onReady: () => { ready = AD.yt.ready = true; flushPending(); },
+      onStateChange: e => {
+        ytState = e.data;
+        if (e.data === 0) onPlayerEvt("yt", "end"); else if (e.data === 1) onPlayerEvt("yt", "play"); else if (e.data === 2) onPlayerEvt("yt", "pause");
+      },
       onAutoplayBlocked: () => {},
       onError: e => { ytErr = e.data; console.log("[watch] erreur YouTube", e.data); }
     }
   });
 };
-function parseId(u){
-  u = String(u || "").trim();
-  const m = u.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/)([A-Za-z0-9_-]{11})/);
-  return m ? m[1] : (/^[A-Za-z0-9_-]{11}$/.test(u) ? u : "");
-}
+// SoundCloud (Widget API)
+AD.sc = {
+  ready: false, started: false, w: null, wr: false, q: [], p: 0, at: 0, pl: false,
+  ensure(){ if (this.started) return; this.started = true; loadScript("https://w.soundcloud.com/player/api.js", () => { this.ready = true; flushPending(); }); },
+  run(f){ if (this.wr) f(); else this.q.push(f); },
+  load(k, pos, auto){
+    const url = k.slice(3);
+    this.p = pos; this.at = Date.now(); this.pl = !!auto;
+    if (!this.w) {
+      const f = document.createElement("iframe"); f.allow = "autoplay";
+      f.src = "https://w.soundcloud.com/player/?url=" + encodeURIComponent(url) + "&auto_play=" + (auto ? "true" : "false") + "&visual=true&show_comments=false";
+      $("w-sc").append(f);
+      const w = this.w = SC.Widget(f), E = SC.Widget.Events;
+      w.bind(E.READY, () => { this.wr = true; const q = this.q; this.q = []; q.forEach(fn => fn()); });
+      w.bind(E.PLAY, () => { this.pl = true; this.at = Date.now(); onPlayerEvt("sc", "play"); });
+      w.bind(E.PAUSE, () => { this.p = this.pos(); this.pl = false; onPlayerEvt("sc", "pause"); });
+      w.bind(E.FINISH, () => { this.pl = false; onPlayerEvt("sc", "end"); });
+      w.bind(E.PLAY_PROGRESS, d => { this.p = d.currentPosition / 1000; this.at = Date.now(); });
+      w.bind(E.SEEK, d => { this.p = d.currentPosition / 1000; this.at = Date.now(); });
+      if (pos > 1) this.run(() => this.w.seekTo(pos * 1000));
+    } else {
+      this.run(() => this.w.load(url, { auto_play: !!auto, show_comments: false, callback: () => { if (pos > 1) this.w.seekTo(pos * 1000); } }));
+    }
+  },
+  play(){ this.run(() => this.w.play()); }, pause(){ this.run(() => this.w.pause()); },
+  seek(s){ this.p = s; this.at = Date.now(); this.run(() => this.w.seekTo(s * 1000)); },
+  pos(){ return this.pl ? this.p + (Date.now() - this.at) / 1000 : this.p; }, playing(){ return this.pl; }
+};
+// Spotify (iFrame API) — extraits de 30 s si la personne n'est pas connectée à Spotify dans son navigateur
+AD.sp = {
+  ready: false, started: false, api: null, c: null, cr: false, q: [], p: 0, at: 0, pl: false, ended: false,
+  ensure(){ if (this.started) return; this.started = true; window.onSpotifyIframeApiReady = api => { this.api = api; this.ready = true; flushPending(); }; loadScript("https://open.spotify.com/embed/iframe-api/v1", () => {}); },
+  run(f){ if (this.cr) f(); else this.q.push(f); },
+  uri(k){ return "spotify:" + k.slice(3).replace("/", ":"); },
+  load(k, pos, auto){
+    this.p = pos; this.at = Date.now(); this.pl = false; this.ended = false;
+    if (!this.c) {
+      const host = document.createElement("div"); $("w-sp").append(host);
+      this.api.createController(host, { uri: this.uri(k), width: "100%", height: "100%" }, c => {
+        this.c = c;
+        c.addListener("ready", () => { this.cr = true; const q = this.q; this.q = []; q.forEach(fn => fn()); });
+        c.addListener("playback_update", e => {
+          const d = e.data || {}, was = this.pl;
+          this.p = (d.position || 0) / 1000; this.at = Date.now(); this.pl = !d.isPaused;
+          if (d.duration && d.position >= d.duration - 400 && d.isPaused) { if (!this.ended) { this.ended = true; onPlayerEvt("sp", "end"); } return; }
+          if (d.duration && d.position < d.duration - 2000) this.ended = false;
+          if (was !== this.pl) onPlayerEvt("sp", this.pl ? "play" : "pause");
+        });
+      });
+      this.run(() => { if (auto) this.c.play(); if (pos > 1) setTimeout(() => this.c.seek(pos), 800); });
+    } else {
+      this.run(() => { this.c.loadUri(this.uri(k)); if (auto) this.c.play(); if (pos > 1) setTimeout(() => this.c.seek(pos), 1000); });
+    }
+  },
+  play(){ this.run(() => this.c.play()); }, pause(){ this.run(() => this.c.pause()); },
+  seek(s){ this.p = s; this.at = Date.now(); this.run(() => this.c.seek(s)); },
+  pos(){ return this.pl ? this.p + (Date.now() - this.at) / 1000 : this.p; }, playing(){ return this.pl; }
+};
+Object.values(AD).forEach(a => { if (a.started === false) a.ensure(); });   // précharge SoundCloud/Spotify : plus rapide au premier lancement
+
 async function showNow(id, by){
   const t = await fetchTitle(id);
   if (vid !== id) return;
   const n = $("now"); n.textContent = ""; n.append(document.createTextNode("En cours : "), el("b", "", t));
-  if (by) n.append(document.createTextNode(" · lancé par " + by));
+  const lab = srcLabel(id);
+  n.append(document.createTextNode((lab ? " · " + lab : "") + (by ? " · lancé par " + by : "")));
   document.title = t + " · Watch Together";
 }
-function load(id, pos = 0, autoplay = true){
-  vid = id;
+function load(key, pos = 0, autoplay = true){
+  const kind = kindOf(key);
+  if (vid && kind !== cur) { try { A().pause(); } catch {} }
+  cur = kind; showKind(kind);
+  vid = key;
   $("empty").style.display = "none";
-  if (autoplay) yt.loadVideoById(id, pos); else yt.cueVideoById(id, pos);
-  remember(id);
+  AD[kind].load(key, pos, autoplay);
+  if (kind === "sp" && !spWarned) { spWarned = true; toast("Spotify : extraits de 30 s, sauf si chacun est connecté à Spotify dans son navigateur."); }
+  remember(key);
   renderPeople();
 }
-function playNow(id){
-  if (!ready) return toast("Le lecteur charge, réessaie dans une seconde.");
+function playNow(key){
+  const ad = AD[kindOf(key)]; ad.ensure();
+  if (!ad.ready) return toast("Le lecteur charge, réessaie dans une seconde.");
   suppressUntil = Date.now() + 1500;
-  load(id, 0, true);
-  showNow(id, myName);
-  fetchTitle(id).then(t => feed(myName, "a lancé « " + t + " »"));
+  load(key, 0, true);
+  showNow(key, myName);
+  fetchTitle(key).then(t => feed(myName, "a lancé « " + t + " »"));
   setTimeout(() => broadcast("load"), 1200);
 }
 $("go").onclick = () => {
-  const id = parseId($("url").value);
-  if (!id) return toast("Lien YouTube non reconnu.");
+  const id = parseKey($("url").value);
+  if (!id) return toast("Lien non reconnu (YouTube, SoundCloud ou Spotify).");
   $("url").value = "";
   playNow(id);
 };
 $("addq").onclick = () => {
-  const id = parseId($("url").value);
-  if (!id) return toast("Lien YouTube non reconnu.");
+  const id = parseKey($("url").value);
+  if (!id) return toast("Lien non reconnu (YouTube, SoundCloud ou Spotify).");
   $("url").value = "";
   addQueue(id);
 };
 $("url").addEventListener("keydown", e => { if (e.key === "Enter") $("go").click(); });
-// Ctrl+V n'importe où : lance la vidéo si rien ne joue, sinon l'ajoute à la file
+// Ctrl+V n'importe où : lance si rien ne joue, sinon ajoute à la file
 document.addEventListener("paste", e => {
   const t = e.target;
   if (t && (t.id === "joincode" || t.id === "name")) return;
-  const id = parseId(e.clipboardData && e.clipboardData.getData("text"));
+  const id = parseKey(e.clipboardData && e.clipboardData.getData("text"));
   if (!id) return;
   e.preventDefault();
   if (!vid) playNow(id); else { addQueue(id); }
 });
 
 function snapshot(act){
-  const playing = yt.getPlayerState() === 1;
-  return { t: "state", id: myId, name: myName, vid, playing, pos: +yt.getCurrentTime().toFixed(2), ts: Date.now(), act: act || "sync" };
+  return { t: "state", id: myId, name: myName, vid, playing: A().playing(), pos: +A().pos().toFixed(2), ts: Date.now(), act: act || "sync" };
 }
-function broadcast(act){ if (ready && vid) send(snapshot(act)); }
+function broadcast(act){ if (vid && A().ready) send(snapshot(act)); }
 function localAction(act){
   broadcast(act);
-  const pos = yt.getCurrentTime();
+  const pos = A().pos();
   if (act === "play") feed(myName, VERBS.play());
   else if (act === "pause") feed(myName, VERBS.pause({ pos }));
   else if (act === "seek") feed(myName, VERBS.seek({ pos }));
   renderPeople();
 }
-function onYtState(e){
-  if (e.data === 0 && vid) { onEnded(); return; }
+function onPlayerEvt(kind, ev){
+  if (kind !== cur) return;
+  if (ev === "end") { if (vid) onEnded(); return; }
   if (Date.now() < suppressUntil || !vid) return;
-  if (e.data === 1) localAction("play");
-  else if (e.data === 2) localAction("pause");
+  localAction(ev);
 }
 // détection d'un saut dans la timeline
 setInterval(() => {
-  if (!ready || !vid) return;
-  const now = Date.now(), pos = yt.getCurrentTime(), playing = yt.getPlayerState() === 1;
+  if (!vid || !A().ready) return;
+  const now = Date.now(), pos = A().pos(), playing = A().playing();
   const expected = lastPlaying ? lastPos + (now - lastAt) / 1000 : lastPos;
   if (now > suppressUntil && lastAt && Math.abs(pos - expected) > 2.5) localAction("seek");
   lastPos = pos; lastAt = now; lastPlaying = playing;
 }, 500);
 
 function applyRemote(m){
-  if (!ready) { pendingState = m; return; }
-  const isYt = m.vid && m.vid.length === 11;
-  if (!vid && !isYt) return;
+  const valid = validKey(m.vid);
+  if (!vid && !valid) return;
+  const kind = valid ? kindOf(m.vid) : cur, ad = AD[kind];
+  ad.ensure();
+  if (!ad.ready) { pendingState = m; return; }
   const elapsed = m.playing ? Math.min(5, Math.max(0, (Date.now() - m.ts) / 1000)) : 0;
   const target = m.pos + elapsed;
   suppressUntil = Date.now() + 2500;
-  if (isYt && m.vid !== vid) { load(m.vid, target, m.playing); showNow(m.vid, cleanName(m.name)); return; }
-  if (Math.abs(yt.getCurrentTime() - target) > 1.2) yt.seekTo(target, true);
-  const cur = yt.getPlayerState() === 1;
-  if (m.playing && !cur) yt.playVideo();
-  if (!m.playing && cur) yt.pauseVideo();
+  if (valid && m.vid !== vid) { load(m.vid, target, m.playing); showNow(m.vid, cleanName(m.name)); return; }
+  if (Math.abs(ad.pos() - target) > 1.2) ad.seek(target);
+  const now = ad.playing();
+  if (m.playing && !now) ad.play();
+  if (!m.playing && now) ad.pause();
 }
 $("sync").onclick = () => { suppressUntil = 0; broadcast("sync"); toast("État envoyé à tout le monde."); };
 $("copy").onclick = async () => {
