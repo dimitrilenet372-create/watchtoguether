@@ -56,8 +56,8 @@ button.ghost{background:var(--card);color:var(--fg);border:1px solid var(--line)
 body.locked main{filter:blur(6px);pointer-events:none;user-select:none}
 #cursors{position:fixed;inset:0;z-index:40;pointer-events:none;overflow:hidden}
 .cur{position:absolute;left:0;top:0;transition:transform .09s linear,opacity .25s;will-change:transform}
-.cur svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
-.cur span{position:absolute;left:12px;top:20px;white-space:nowrap;font-size:11.5px;font-weight:600;color:#fff;padding:2px 8px;border-radius:999px;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.cur svg{display:block;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))}
+.cur span{position:absolute;left:13px;top:15px;white-space:nowrap;font:500 12px/16px Inter,"Segoe UI",system-ui,sans-serif;color:#fff;padding:2px 7px 3px;border-radius:2px 8px 8px 8px;box-shadow:0 1px 3px rgba(0,0,0,.35)}
 body.embed header h1,body.embed #joinrow{display:none}
 body.embed header{justify-content:flex-end}
 body.embed{background:#000}
@@ -77,11 +77,6 @@ body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
     <h1>Watch Together</h1>
     <div class="pill">Salon <b id="room"></b> · <span id="peers">seul</span></div>
   </header>
-  <div class="row" id="joinrow">
-    <input id="joincode" placeholder="Rejoindre un salon : colle ici un lien ou un code" autocomplete="off">
-    <button class="ghost" id="join">Rejoindre</button>
-    <button class="ghost" id="newroom">Nouveau salon</button>
-  </div>
   <div class="row">
     <input id="url" placeholder="Colle un lien YouTube, SoundCloud ou Spotify (ou Ctrl+V n'importe où)" autocomplete="off">
     <button id="go">Lancer</button>
@@ -92,6 +87,11 @@ body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
   <div class="row">
     <button class="ghost" id="copy">Copier le lien d'invitation</button>
     <button class="ghost" id="sync">Resynchroniser</button>
+  </div>
+  <div class="row" id="joinrow">
+    <input id="joincode" placeholder="Rejoindre un salon : colle ici un lien ou un code" autocomplete="off">
+    <button class="ghost" id="join">Rejoindre</button>
+    <button class="ghost" id="newroom">Nouveau salon</button>
   </div>
   <div class="cols">
     <section class="card">
@@ -157,6 +157,8 @@ $("room").textContent = room.slice(0,4) + "-" + room.slice(4,8) + "-" + room.sli
 
 // ---- identité : le nom est obligatoire avant d'entrer dans le salon ----
 let myName = "", entered = false;
+const FIGMA = ["#F24822", "#FFA629", "#0D99FF", "#14AE5C", "#9747FF", "#FF24BD", "#1BC5C5", "#7B61FF"];
+const figmaColor = id => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return FIGMA[h % FIGMA.length]; };
 const colorOf = id => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return "hsl(" + (h % 360) + " 80% 62%)"; };
 $("gatecode").textContent = room.slice(0,4) + "-" + room.slice(4,8) + "-" + room.slice(8);
 $("gname").value = cleanName(store.get("wt-name", "")) || cleanName(params.get("name"));
@@ -209,7 +211,7 @@ function renderFeed(){
 }
 function personRow(name, me, online, status, id){
   const r = el("div", "who" + (me ? " me" : ""));
-  const d = el("span", "dot" + (online ? " on" : "")); d.style.setProperty("--c", colorOf(id || myId));
+  const d = el("span", "dot" + (online ? " on" : "")); d.style.setProperty("--c", figmaColor(id || myId));
   r.append(d, el("span", "n", name), el("span", "s", status));
   return r;
 }
@@ -335,9 +337,9 @@ function showCursor(id, name, x, y){
   let e = curEls.get(id);
   if (!e) {
     e = el("div", "cur");
-    e.innerHTML = '<svg width="18" height="22" viewBox="0 0 18 22"><path d="M1.5 1.2 1.5 17l4.2-3.9 3 6.6 3.2-1.4-3-6.4 5.8-.2z" fill="currentColor" stroke="#000" stroke-opacity=".55" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+    e.innerHTML = '<svg width="16" height="20" viewBox="0 0 16 20"><path d="M1.2 1.2v14.6l3.6-3.4 2.7 6 2.6-1.1-2.7-5.9h5L1.2 1.2z" fill="currentColor" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>';
     e.append(el("span"));
-    e.style.color = colorOf(id); e.lastChild.style.background = colorOf(id); e.lastChild.style.color = "#10131a";
+    e.style.color = figmaColor(id); e.lastChild.style.background = figmaColor(id);
     $("cursors").append(e); curEls.set(id, e);
   }
   e.lastChild.textContent = name;
@@ -469,6 +471,7 @@ function loadScript(src, ok){
   document.head.append(sc);
 }
 function flushPending(){
+  if (launchWait && AD[kindOf(launchWait)].ready) { const k = launchWait; launchWait = null; playNow(k); }
   if (!pendingState) return;
   const m = pendingState, k = validKey(m.vid) ? m.vid : (vid || "");
   if (AD[kindOf(k)].ready) { pendingState = null; applyRemote(m); }
@@ -487,13 +490,13 @@ window.onYouTubeIframeAPIReady = () => {
   yt = new YT.Player("player", {
     playerVars: { playsinline: 1, rel: 0, origin: location.origin, widget_referrer: location.href.split("#")[0] },
     events: {
-      onReady: () => { ready = AD.yt.ready = true; flushPending(); },
+      onReady: () => { ready = AD.yt.ready = true; notice(""); flushPending(); },
       onStateChange: e => {
         ytState = e.data;
         if (e.data === 0) onPlayerEvt("yt", "end"); else if (e.data === 1) onPlayerEvt("yt", "play"); else if (e.data === 2) onPlayerEvt("yt", "pause");
       },
       onAutoplayBlocked: () => {},
-      onError: e => { ytErr = e.data; console.log("[watch] erreur YouTube", e.data); }
+      onError: e => { ytErr = e.data; console.log("[watch] erreur YouTube", e.data); toast("YouTube ne peut pas lire cette vidéo ici (code " + e.data + ")."); }
     }
   });
 };
@@ -555,7 +558,6 @@ AD.sp = {
   seek(s){ this.p = s; this.at = Date.now(); this.run(() => this.c.seek(s)); },
   pos(){ return this.pl ? this.p + (Date.now() - this.at) / 1000 : this.p; }, playing(){ return this.pl; }
 };
-Object.values(AD).forEach(a => { if (a.started === false) a.ensure(); });   // précharge SoundCloud/Spotify : plus rapide au premier lancement
 
 async function showNow(id, by){
   const t = await fetchTitle(id);
@@ -576,9 +578,14 @@ function load(key, pos = 0, autoplay = true){
   remember(key);
   renderPeople();
 }
+let launchWait = null;
 function playNow(key){
   const ad = AD[kindOf(key)]; ad.ensure();
-  if (!ad.ready) return toast("Le lecteur charge, réessaie dans une seconde.");
+  if (!ad.ready) {   // le lecteur charge encore : on lancera dès qu'il est prêt
+    launchWait = key; toast("Le lecteur charge… la lecture démarre dès qu'il est prêt.");
+    return;
+  }
+  launchWait = null;
   suppressUntil = Date.now() + 1500;
   load(key, 0, true);
   showNow(key, myName);
@@ -602,7 +609,7 @@ $("url").addEventListener("keydown", e => { if (e.key === "Enter") $("go").click
 document.addEventListener("paste", e => {
   if (!entered) return;
   const t = e.target;
-  if (t && (t.id === "joincode" || t.id === "name")) return;
+  if (t && t.id === "name") return;
   const id = parseKey(e.clipboardData && e.clipboardData.getData("text"));
   if (!id) return;
   e.preventDefault();
@@ -658,6 +665,7 @@ $("copy").onclick = async () => {
   catch { toast("Lien : " + link); }
 };
 renderPeople(); renderQueue(); renderHistory(); renderFeed();
+setTimeout(() => { if (!AD.yt.ready) notice("Le lecteur YouTube n'a pas chargé. Un bloqueur de pub ou de pisteurs le bloque peut-être : désactive-le pour ce site, puis recharge."); }, 8000);
 </script>
 </body>
 </html>
