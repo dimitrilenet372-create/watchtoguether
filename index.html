@@ -55,7 +55,8 @@ button.ghost{background:var(--card);color:var(--fg);border:1px solid var(--line)
 #gate .code{font-family:Consolas,monospace;color:var(--fg);letter-spacing:.05em}
 body.locked main{filter:blur(6px);pointer-events:none;user-select:none}
 #cursors{position:fixed;inset:0;z-index:40;pointer-events:none;overflow:hidden}
-.cur{position:absolute;left:0;top:0;transition:transform .09s linear,opacity .25s;will-change:transform}
+.cur{position:absolute;left:0;top:0;transition:opacity .25s;will-change:transform}
+#shield{position:absolute;left:0;right:0;top:0;bottom:52px;z-index:5;cursor:default;display:none}
 .cur svg{display:block;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))}
 .cur span{position:absolute;left:13px;top:15px;white-space:nowrap;font:500 12px/16px Inter,"Segoe UI",system-ui,sans-serif;color:#fff;padding:2px 7px 3px;border-radius:2px 8px 8px 8px;box-shadow:0 1px 3px rgba(0,0,0,.35)}
 body.embed header h1,body.embed #joinrow{display:none}
@@ -82,7 +83,7 @@ body.embed main{padding:10px 14px 14px;gap:8px;max-width:none}
     <button id="go">Lancer</button>
     <button class="ghost" id="addq" title="Ajouter à la file d'attente">+ File</button>
   </div>
-  <div class="frame"><div id="w-yt"><div id="player"></div></div><div id="w-sc" style="display:none"></div><div id="w-sp" style="display:none"></div><div id="empty" class="empty">Colle un lien YouTube, SoundCloud ou Spotify ci-dessus, ou choisis un titre dans « Récemment ».<br>Tout le monde dans le salon verra / entendra la même chose, au même moment.</div></div>
+  <div class="frame"><div id="w-yt"><div id="player"></div></div><div id="w-sc" style="display:none"></div><div id="w-sp" style="display:none"></div><div id="shield"></div><div id="empty" class="empty">Colle un lien YouTube, SoundCloud ou Spotify ci-dessus, ou choisis un titre dans « Récemment ».<br>Tout le monde dans le salon verra / entendra la même chose, au même moment.</div></div>
   <div id="now"></div>
   <div class="row">
     <button class="ghost" id="copy">Copier le lien d'invitation</button>
@@ -321,45 +322,71 @@ function onEnded(){
   playNow(next.id);
 }
 
-// ---- curseurs des autres (positions relatives au lecteur) ----
-const curEls = new Map(), curPos = new Map(), curTimers = new Map();
+// ---- curseurs des autres (positions relatives au lecteur, lissées à chaque image) ----
+const curs = new Map();   // id -> { el, x, y (affichés), tx, ty (cibles), t (dernier signal) }
 const frameBox = document.querySelector(".frame");
-function placeCursor(id){
-  const e = curEls.get(id), c = curPos.get(id); if (!e || !c) return;
-  const r = frameBox.getBoundingClientRect();
-  const x = r.left + c.x * r.width, y = r.top + c.y * r.height;
-  const off = x < -20 || y < -20 || x > innerWidth + 20 || y > innerHeight + 20;
-  e.style.opacity = off ? "0" : "1";
-  e.style.transform = "translate(" + Math.round(x) + "px," + Math.round(y) + "px)";
-}
+let rafOn = false, lastFrame = 0;
 function showCursor(id, name, x, y){
-  let e = curEls.get(id);
-  if (!e) {
-    e = el("div", "cur");
+  let c = curs.get(id);
+  if (!c) {
+    const e = el("div", "cur");
     e.innerHTML = '<svg width="16" height="20" viewBox="0 0 16 20"><path d="M1.2 1.2v14.6l3.6-3.4 2.7 6 2.6-1.1-2.7-5.9h5L1.2 1.2z" fill="currentColor" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>';
-    e.append(el("span"));
-    e.style.color = figmaColor(id); e.lastChild.style.background = figmaColor(id);
-    $("cursors").append(e); curEls.set(id, e);
+    const lab = el("span"); e.append(lab);
+    e.style.color = figmaColor(id); lab.style.background = figmaColor(id);
+    e.style.opacity = "0";
+    $("cursors").append(e);
+    c = { el: e, lab, x, y, tx: x, ty: y, t: 0, fresh: true };
+    curs.set(id, c);
   }
-  e.lastChild.textContent = name;
-  curPos.set(id, { x, y }); placeCursor(id);
-  clearTimeout(curTimers.get(id)); curTimers.set(id, setTimeout(() => hideCursor(id), 6000));
+  if (c.lab.textContent !== name) c.lab.textContent = name;
+  c.tx = x; c.ty = y; c.t = performance.now();
+  if (!rafOn) { rafOn = true; lastFrame = performance.now(); requestAnimationFrame(frame); }
 }
 function hideCursor(id){
-  const e = curEls.get(id); if (e) e.remove();
-  curEls.delete(id); curPos.delete(id); clearTimeout(curTimers.get(id)); curTimers.delete(id);
+  const c = curs.get(id); if (!c) return;
+  c.el.remove(); curs.delete(id);
 }
-addEventListener("scroll", () => { for (const id of curEls.keys()) placeCursor(id); }, { passive: true });
-addEventListener("resize", () => { for (const id of curEls.keys()) placeCursor(id); });
-let lastCur = 0;
-document.addEventListener("mousemove", e => {
-  if (!entered || !conns.size) return;
-  const now = performance.now(); if (now - lastCur < 40) return; lastCur = now;
+function frame(now){
+  const dt = Math.min(64, now - lastFrame); lastFrame = now;
+  const k = 1 - Math.exp(-dt / 55);          // rattrapage fluide, indépendant du nombre d'images/s
   const r = frameBox.getBoundingClientRect();
-  send({ t: "cur", id: myId, name: myName, x: +((e.clientX - r.left) / r.width).toFixed(4), y: +((e.clientY - r.top) / r.height).toFixed(4) });
-});
-// au-dessus du lecteur, le navigateur ne nous transmet plus la souris : on masque le curseur chez les autres
-frameBox.addEventListener("mouseenter", () => send({ t: "cur", id: myId, off: true }));
+  for (const [id, c] of curs) {
+    if (now - c.t > 6000) { hideCursor(id); continue; }
+    if (c.fresh) { c.x = c.tx; c.y = c.ty; c.fresh = false; } else { c.x += (c.tx - c.x) * k; c.y += (c.ty - c.y) * k; }
+    const px = r.left + c.x * r.width, py = r.top + c.y * r.height;
+    const off = px < -20 || py < -20 || px > innerWidth + 20 || py > innerHeight + 20;
+    c.el.style.opacity = off ? "0" : "1";
+    c.el.style.transform = "translate3d(" + px.toFixed(1) + "px," + py.toFixed(1) + "px,0)";
+  }
+  if (curs.size) requestAnimationFrame(frame); else rafOn = false;
+}
+// envoi : au plus ~30 fois/s, avec toujours la dernière position (rien n'est perdu à l'arrêt)
+let curLast = null, curTimer = 0, curSentAt = 0;
+function sendCursor(){
+  curTimer = 0;
+  if (!curLast || !conns.size) return;
+  curSentAt = performance.now();
+  send({ t: "cur", id: myId, name: myName, x: curLast.x, y: curLast.y });
+  curLast = null;
+}
+function trackMouse(e){
+  if (!entered) return;
+  const r = frameBox.getBoundingClientRect();
+  curLast = { x: +((e.clientX - r.left) / r.width).toFixed(4), y: +((e.clientY - r.top) / r.height).toFixed(4) };
+  if (curTimer) return;
+  const wait = Math.max(0, 33 - (performance.now() - curSentAt));
+  curTimer = setTimeout(sendCursor, wait);
+}
+document.addEventListener("mousemove", trackMouse, { passive: true });
+// Sur la vidéo YouTube, un voile transparent capte la souris (le navigateur ne la transmet pas aux lecteurs externes).
+// Un clic dessus fait lecture/pause, comme sur YouTube ; la barre de contrôle du bas reste utilisable.
+const shield = $("shield");
+shield.addEventListener("mousemove", trackMouse, { passive: true });
+shield.addEventListener("mouseleave", () => send({ t: "cur", id: myId, off: true }));
+shield.addEventListener("click", () => { if (vid && kindOf(vid) === "yt" && A().ready) { A().playing() ? A().pause() : A().play(); } });
+function syncShield(){ shield.style.display = vid && kindOf(vid) === "yt" ? "block" : "none"; }
+// SoundCloud / Spotify : le lecteur occupe tout le cadre, la souris n'est pas visible → on masque notre curseur chez les autres
+frameBox.addEventListener("mouseenter", () => { if (!(vid && kindOf(vid) === "yt")) send({ t: "cur", id: myId, off: true }); });
 document.documentElement.addEventListener("mouseleave", () => send({ t: "cur", id: myId, off: true }));
 
 // ---- connexion directe entre navigateurs (WebRTC via PeerJS) ----
@@ -373,6 +400,11 @@ function helloMsg(){ return { t: "hello", id: myId, name: myName, slot: mySlot }
 const VERBS = { play: () => "a relancé la lecture", pause: m => "a mis en pause · " + fmt(m.pos), seek: m => "a déplacé la lecture à " + fmt(m.pos) };
 function handle(m, c){
   if (!m || typeof m !== "object" || m.id === myId) return;
+  if (m.t === "cur") {   // chemin rapide : pas de recalcul de la liste des participants
+    if (m.off) hideCursor(m.id);
+    else if (Number.isFinite(m.x) && Number.isFinite(m.y)) { const q = people.get(m.id); showCursor(m.id, (q && q.name) || cleanName(m.name) || "Invité", m.x, m.y); }
+    return;
+  }
   const p = person(m.id, m.name);
   p.online = true;
   if (c) connPerson.set(c.peer, m.id);
@@ -390,9 +422,6 @@ function handle(m, c){
     if (m.act === "load" && m.vid) fetchTitle(m.vid).then(t => feed(p.name, "a lancé « " + t + " »"));
     else if (VERBS[m.act]) feed(p.name, VERBS[m.act](m));
     applyRemote(m);
-  } else if (m.t === "cur") {
-    if (m.off) hideCursor(m.id); else if (Number.isFinite(m.x) && Number.isFinite(m.y)) showCursor(m.id, p.name, m.x, m.y);
-    return;
   } else if (m.t === "queue") {
     if (+m.rev > qrev) { queue = sanitizeQueue(m.items); qrev = +m.rev; renderQueue(); }
   }
@@ -575,6 +604,7 @@ function load(key, pos = 0, autoplay = true){
   const kind = kindOf(key);
   if (vid && kind !== cur) { try { A().pause(); } catch {} }
   cur = kind; showKind(kind);
+  vid = key; syncShield();
   vid = key;
   $("empty").style.display = "none";
   AD[kind].load(key, pos, autoplay);
