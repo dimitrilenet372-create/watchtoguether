@@ -215,7 +215,7 @@ body.embed #avatars{margin-right:auto}
       </div>
     </aside>
   </div>
-  <div class="ver">Watch Together · version 17.11.7</div>
+  <div class="ver">Watch Together · version 17.11.8</div>
 </div>
 <div id="toast" hidden></div>
 <div id="notice" hidden></div>
@@ -558,7 +558,14 @@ document.addEventListener("mousemove", trackMouse, { passive: true });
 const shield = $("shield");
 shield.addEventListener("mousemove", trackMouse, { passive: true });
 shield.addEventListener("mouseleave", () => send({ t: "cur", id: myId, off: true }));
-shield.addEventListener("click", () => { if (vid && kindOf(vid) === "yt" && A().ready) { A().playing() ? A().pause() : A().play(); } });
+// Si YouTube a démarré sans le son (lecture auto), le premier clic sur la vidéo active le son au lieu de mettre en pause.
+shield.addEventListener("click", () => {
+  if (!(vid && kindOf(vid) === "yt" && A().ready)) return;
+  try { if (yt.isMuted()) { yt.unMute(); if (yt.getVolume() === 0) yt.setVolume(70); toast("Son activé."); return; } } catch {}
+  A().playing() ? A().pause() : A().play();
+});
+// Tout clic sur la page autorise le son : on le réactive s'il était coupé par la lecture auto.
+document.addEventListener("pointerdown", () => { try { if (yt && ready && vid && kindOf(vid) === "yt" && yt.isMuted()) yt.unMute(); } catch {} }, true);
 // le voile est posé sur la page (pas dans le cadre) et recalé sur la vidéo, pour qu'aucun empilement du navigateur ne le passe sous le lecteur
 function syncShield(){
   const on = vid && kindOf(vid) === "yt";
