@@ -62,7 +62,10 @@ h1{font:600 16px/1 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;m
 .frame>#flash{inset:auto;left:12px;top:12px;width:auto;height:auto;max-width:calc(100% - 24px);z-index:6;padding:7px 12px;border-radius:999px;background:rgba(15,15,18,.82);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.12);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transform:translateY(-6px);transition:opacity .2s,transform .2s;pointer-events:none}
 .frame>#flash.show{opacity:1;transform:none}
 #flash b{font-weight:600}
-.under{display:flex;align-items:center;gap:12px;min-height:30px}
+.under{display:flex;align-items:center;gap:12px;min-height:30px;flex-wrap:wrap}
+#webnote{display:flex;align-items:center;gap:10px;font-size:12.5px;color:#ffd60a;order:9;flex-basis:100%;flex-wrap:wrap}
+.vi img.fav{object-fit:contain;padding:8px 20px;background:var(--card2)}
+.frame video{position:absolute;inset:0;width:100%;height:100%;background:#000}
 #now{flex:1;min-width:0;color:var(--mute);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #now b{color:var(--fg);font-weight:600;font-size:14.5px}
 
@@ -177,22 +180,23 @@ body.embed #avatars{margin-right:auto}
     <section class="stage">
       <div class="omni">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
-        <input id="url" placeholder="Colle un lien YouTube, SoundCloud ou Spotify" autocomplete="off">
+        <input id="url" placeholder="Colle un lien : YouTube, SoundCloud, Spotify, Vimeo, fichier vidéo ou n'importe quel site" autocomplete="off">
         <button class="btn" id="addq" title="Ajouter à la file d'attente">+ File</button>
         <button class="btn primary" id="go" title="Lancer pour tout le monde"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><span class="lbl">Lancer</span></button>
       </div>
       <div class="frame">
-        <div id="w-yt"><div id="player"></div></div><div id="w-sc" style="display:none"></div><div id="w-sp" style="display:none"></div>
+        <div id="w-yt"><div id="player"></div></div><div id="w-sc" style="display:none"></div><div id="w-sp" style="display:none"></div><div id="w-vm" style="display:none"></div><div id="w-vf" style="display:none"></div><div id="w-web" style="display:none"></div>
         <div id="empty">
           <div class="big">Colle un lien pour commencer</div>
           <div class="sub">Fais <kbd>Ctrl</kbd> + <kbd>V</kbd> n'importe où sur la page. Tout le monde dans le salon verra la même chose, au même moment.</div>
           <button class="btn primary" id="pastebtn">Coller depuis le presse-papiers</button>
-          <div class="svc"><span><i style="--c:#ff3b30"></i>YouTube</span><span><i style="--c:#ff7700"></i>SoundCloud</span><span><i style="--c:#1ed760"></i>Spotify</span></div>
+          <div class="svc"><span><i style="--c:#ff3b30"></i>YouTube</span><span><i style="--c:#ff7700"></i>SoundCloud</span><span><i style="--c:#1ed760"></i>Spotify</span><span><i style="--c:#1ab7ea"></i>Vimeo</span><span><i style="--c:#bf5af2"></i>Fichiers vidéo</span><span><i style="--c:#8e8e93"></i>N'importe quel site</span></div>
         </div>
         <div id="flash"></div>
       </div>
       <div class="under">
         <div id="now"></div>
+        <span id="webnote" hidden>Page partagée : la lecture n'est pas synchronisée sur ce site, lancez-la ensemble. <button class="btn sm" id="webopen">Ouvrir dans un onglet</button></span>
         <button class="btn sm" id="point" title="Montrer ton curseur aux autres sur la vidéo (Échap pour arrêter). Pendant ce temps, la vidéo n'est plus cliquable."><svg width="12" height="14" viewBox="0 0 16 20"><path d="M1.2 1.2v14.6l3.6-3.4 2.7 6 2.6-1.1-2.7-5.9h5L1.2 1.2z" fill="currentColor"/></svg><span id="pointlbl">Pointer sur la vidéo</span></button>
         <button class="btn sm" id="sync" title="Remettre tout le monde au même moment que toi">Resynchroniser</button>
       </div>
@@ -216,7 +220,7 @@ body.embed #avatars{margin-right:auto}
       </div>
     </aside>
   </div>
-  <div class="ver">Watch Together · version 17.11.9</div>
+  <div class="ver">Watch Together · version 17.11.10</div>
 </div>
 <div id="toast" hidden></div>
 <div id="notice" hidden></div>
@@ -236,13 +240,17 @@ const fmt = s => { s = Math.max(0, Math.round(s || 0)); const h = Math.floor(s /
 const clock = () => new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 const cleanName = n => String(n || "").trim().slice(0, 24);
 // Une « clé » identifie un média : id YouTube brut (11 car.), "sc:<url SoundCloud>" ou "sp:<type>/<id Spotify>"
-const kindOf = k => String(k).startsWith("sc:") ? "sc" : String(k).startsWith("sp:") ? "sp" : "yt";
+const kindOf = k => { const m = String(k).match(/^(sc|sp|vm|vf|web):/); return m ? m[1] : "yt"; };
+const SAFE_URL = /^https:\/\/[^\s"'<>\\]{4,1990}$/;
 function validKey(k){
   k = String(k || "");
   return /^[A-Za-z0-9_-]{11}$/.test(k)
     || /^sc:https:\/\/(on\.|www\.)?soundcloud\.com\/[\w\-./%]{2,200}$/.test(k)
-    || /^sp:(track|episode|album|playlist|show)\/[A-Za-z0-9]{22}$/.test(k);
+    || /^sp:(track|episode|album|playlist|show)\/[A-Za-z0-9]{22}$/.test(k)
+    || /^vm:\d{4,12}$/.test(k)
+    || ((k.startsWith("vf:") || k.startsWith("web:")) && SAFE_URL.test(k.slice(k.indexOf(":") + 1)) && !isOwnLink(k.slice(k.indexOf(":") + 1)));
 }
+function isOwnLink(u){ try { return new URL(u).host === location.host; } catch { return false; } }
 function parseKey(u){
   u = String(u || "").trim();
   let m = u.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/)([A-Za-z0-9_-]{11})/);
@@ -251,9 +259,18 @@ function parseKey(u){
   if (m) return "sc:https://" + m[1].replace(/\/$/, "");
   m = u.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?(track|episode|album|playlist|show)\/([A-Za-z0-9]{22})/) || u.match(/^spotify:(track|episode|album|playlist|show):([A-Za-z0-9]{22})$/);
   if (m) return "sp:" + m[1] + "/" + m[2];
-  return /^[A-Za-z0-9_-]{11}$/.test(u) ? u : "";
+  m = u.match(/^https?:\/\/(?:www\.|player\.)?vimeo\.com\/(?:video\/|channels\/[\w-]+\/|groups\/[\w-]+\/videos\/)?(\d{4,12})/i);
+  if (m) return "vm:" + m[1];
+  if (/^[A-Za-z0-9_-]{11}$/.test(u)) return u;
+  // n'importe quel autre lien web
+  if (/^http:\/\//i.test(u)) u = "https://" + u.slice(7);
+  if (!SAFE_URL.test(u) || isOwnLink(u)) return "";
+  try { new URL(u); } catch { return ""; }
+  if (/\.(mp4|webm|ogv|ogg|mov|m4v|mp3|m4a|wav|flac|m3u8)(\?|#|$)/i.test(new URL(u).pathname + (u.includes("?") ? "?" : ""))) return "vf:" + u;
+  return "web:" + u;
 }
-const srcLabel = k => ({ sc: "SoundCloud", sp: "Spotify", yt: "" })[kindOf(k)];
+const hostOf = k => { try { return new URL(k.slice(k.indexOf(":") + 1)).hostname.replace(/^www\./, ""); } catch { return "lien"; } };
+const srcLabel = k => { const kd = kindOf(k); return kd === "web" || kd === "vf" ? hostOf(k) : ({ sc: "SoundCloud", sp: "Spotify", vm: "Vimeo", yt: "" })[kd]; };
 
 let room = location.hash.slice(1).toUpperCase().replace(/[^A-Z0-9]/g, "");
 if (room.length < 8) {
@@ -386,7 +403,7 @@ function personRow(name, me, online, status, id){
 function renderPeople(){
   const box = $("people"); box.textContent = "";
   const avs = $("avatars"); avs.textContent = "";
-  const mine = !vid ? "connecté" : (A().ready && A().playing() ? "▶ en lecture" : "⏸ en pause");
+  const mine = !vid ? "connecté" : kindOf(vid) === "web" ? "sur la page partagée" : (A().ready && A().playing() ? "▶ en lecture" : "⏸ en pause");
   box.append(personRow(myName, true, true, mine, myId));
   const me = avatar(myName, myId, true); me.title = myName + " (toi)"; avs.append(me);
   let shown = 1, online = 1;
@@ -394,6 +411,7 @@ function renderPeople(){
     let st;
     if (!p.online) st = "parti à " + new Date(p.leftAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
     else if (!p.hasVideo) st = "connecté";
+    else if (kindOf(p.vid || "") === "web") st = "sur la page partagée";
     else st = (p.playing ? "▶ en lecture" : "⏸ en pause") + " · " + fmt(p.pos);
     box.append(personRow(p.name, false, p.online, st, pid_));
     if (p.online) online++;
@@ -413,6 +431,8 @@ function oembedUrls(k){
   const kd = kindOf(k);
   if (kd === "sc") { const u = k.slice(3); return ["https://soundcloud.com/oembed?format=json&url=" + encodeURIComponent(u), "https://noembed.com/embed?url=" + encodeURIComponent(u)]; }
   if (kd === "sp") { const u = "https://open.spotify.com/" + k.slice(3); return ["https://open.spotify.com/oembed?url=" + encodeURIComponent(u), "https://noembed.com/embed?url=" + encodeURIComponent(u)]; }
+  if (kd === "vm") return ["https://vimeo.com/api/oembed.json?url=" + encodeURIComponent("https://vimeo.com/" + k.slice(3))];
+  if (kd === "vf" || kd === "web") return [];
   const w = "https://www.youtube.com/watch?v=" + k;
   return ["https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent(w), "https://noembed.com/embed?url=" + encodeURIComponent(w)];
 }
@@ -431,9 +451,12 @@ async function fetchTitle(k){
       }
     } catch {}
   }
-  return kindOf(k) === "yt" ? "Vidéo " + k : (srcLabel(k) + " : titre");
+  const kd = kindOf(k);
+  if (kd === "vf") { try { return decodeURIComponent(new URL(k.slice(3)).pathname.split("/").pop()) || hostOf(k); } catch { return hostOf(k); } }
+  if (kd === "web") { try { const u = new URL(k.slice(4)); const tail = decodeURIComponent(u.pathname.split("/").filter(Boolean).pop() || "").replace(/[-_]+/g, " ").replace(/\.[a-z0-9]+$/i, ""); return hostOf(k) + (tail ? " · " + tail.slice(0, 80) : ""); } catch { return hostOf(k); } }
+  return kd === "yt" ? "Vidéo " + k : (srcLabel(k) + " : titre");
 }
-const thumb = k => kindOf(k) === "yt" ? "https://i.ytimg.com/vi/" + k + "/mqdefault.jpg" : (thumbs[k] || "");
+const thumb = k => { const kd = kindOf(k); if (kd === "yt") return "https://i.ytimg.com/vi/" + k + "/mqdefault.jpg"; if (kd === "web" || kd === "vf") return "https://www.google.com/s2/favicons?sz=64&domain=" + encodeURIComponent(hostOf(k)); return thumbs[k] || ""; };
 let hist = store.get("wt-history", []).filter(validKey).slice(0, 12);
 function remember(id){
   hist = [id, ...hist.filter(x => x !== id)].slice(0, 12);
@@ -441,6 +464,8 @@ function remember(id){
 }
 function videoRow(id, by, buttons){
   const r = el("div", "vi"); const img = el("img"); img.alt = ""; img.loading = "lazy";
+  img.onerror = () => { img.style.visibility = "hidden"; };
+  if (/^(web|vf):/.test(id)) img.className = "fav";
   const setThumb = () => { const u = thumb(id); if (u) { img.src = u; img.style.visibility = "visible"; } else img.style.visibility = "hidden"; };
   setThumb();
   const t = el("div", "t"); const ti = el("div", "", titles[id] || "Chargement…"); t.append(ti);
@@ -619,7 +644,7 @@ function handle(m, c){
   } else if (m.t === "name") {
     p.name = cleanName(m.name) || p.name;
   } else if (m.t === "state") {
-    p.playing = !!m.playing; p.pos = +m.pos || 0; p.hasVideo = !!m.vid;
+    p.playing = !!m.playing; p.pos = +m.pos || 0; p.hasVideo = !!m.vid; p.vid = String(m.vid || "");
     if (m.act === "load" && m.vid) fetchTitle(m.vid).then(t => feed(p.name, "a lancé « " + t + " »"));
     else if (VERBS[m.act]) feed(p.name, VERBS[m.act](m));
     applyRemote(m);
@@ -706,8 +731,91 @@ function flushPending(){
   if (AD[kindOf(k)].ready) { pendingState = null; applyRemote(m); }
 }
 function showKind(kind){
-  for (const k of ["yt", "sc", "sp"]) $("w-" + k).style.display = k === kind ? "" : "none";
+  for (const k of ["yt", "sc", "sp", "vm", "vf", "web"]) $("w-" + k).style.display = k === kind ? "" : "none";
+  $("webnote").hidden = kind !== "web";
+  if (kind !== "web") { const f = $("w-web").firstChild; if (f) f.remove(); }   // coupe le son d'une page quittée
+  if (kind !== "vf" && AD.vf.v) { try { AD.vf.v.pause(); } catch {} }
 }
+// Fichier vidéo/audio direct (mp4, webm, mp3, m3u8…) : lecteur du navigateur, entièrement synchronisé
+AD.vf = {
+  ready: true, v: null, hls: null, ensure(){},
+  el(){
+    if (this.v) return this.v;
+    const v = this.v = document.createElement("video");
+    v.controls = true; v.playsInline = true; v.preload = "auto";
+    v.addEventListener("play", () => onPlayerEvt("vf", "play"));
+    v.addEventListener("pause", () => { if (!v.ended) onPlayerEvt("vf", "pause"); });
+    v.addEventListener("ended", () => onPlayerEvt("vf", "end"));
+    v.addEventListener("error", () => toast("Ce fichier ne peut pas être lu (lien expiré ou protégé ?)."));
+    $("w-vf").append(v);
+    return v;
+  },
+  load(k, pos, auto){
+    const url = k.slice(3), v = this.el();
+    if (this.hls) { try { this.hls.destroy(); } catch {} this.hls = null; }
+    const start = () => { try { if (pos > 0) v.currentTime = pos; } catch {} if (auto) this.play(); };
+    const isHls = /\.m3u8(\?|#|$)/i.test(url);
+    if (isHls && !v.canPlayType("application/vnd.apple.mpegurl")) {
+      const go = () => { this.hls = new Hls(); this.hls.loadSource(url); this.hls.attachMedia(v); this.hls.on(Hls.Events.MANIFEST_PARSED, start); };
+      if (window.Hls) go(); else loadScript("https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js", go);
+    } else {
+      v.src = url; v.addEventListener("loadedmetadata", start, { once: true });
+    }
+  },
+  play(){
+    const v = this.el();
+    const p = v.play();
+    if (p && p.catch) p.catch(() => { v.muted = true; v.play().catch(() => {}); toast("Lecture lancée sans le son : clique sur le lecteur pour l'activer."); });
+  },
+  pause(){ this.el().pause(); }, seek(s){ try { this.el().currentTime = s; } catch {} },
+  pos(){ return this.v ? this.v.currentTime || 0 : 0; }, playing(){ return !!this.v && !this.v.paused && !this.v.ended; }
+};
+// Vimeo (Player API)
+AD.vm = {
+  ready: false, started: false, pl: null, prd: false, q: [], p: 0, at: 0, on: false,
+  ensure(){ if (this.started) return; this.started = true; loadScript("https://player.vimeo.com/api/player.js", () => { this.ready = true; flushPending(); }); },
+  run(f){ if (this.prd) f(); else this.q.push(f); },
+  load(k, pos, auto){
+    const id = +k.slice(3);
+    this.p = pos; this.at = Date.now(); this.on = false;
+    if (!this.pl) {
+      const f = document.createElement("iframe");
+      f.allow = "autoplay; fullscreen; picture-in-picture"; f.allowFullscreen = true;
+      f.src = "https://player.vimeo.com/video/" + id + "?autoplay=" + (auto ? 1 : 0) + "&playsinline=1";
+      $("w-vm").append(f);
+      const pl = this.pl = new Vimeo.Player(f);
+      pl.ready().then(() => { this.prd = true; const q = this.q; this.q = []; q.forEach(fn => fn()); }).catch(() => {});
+      pl.on("play", () => { this.on = true; this.at = Date.now(); onPlayerEvt("vm", "play"); });
+      pl.on("pause", d => { this.on = false; if (d && d.seconds != null) this.p = d.seconds; onPlayerEvt("vm", "pause"); });
+      pl.on("ended", () => { this.on = false; onPlayerEvt("vm", "end"); });
+      pl.on("timeupdate", d => { this.p = d.seconds; this.at = Date.now(); });
+      pl.on("seeked", d => { this.p = d.seconds; this.at = Date.now(); });
+      if (pos > 1) this.run(() => pl.setCurrentTime(pos).catch(() => {}));
+    } else {
+      this.run(() => this.pl.loadVideo(id).then(() => { if (pos > 1) this.pl.setCurrentTime(pos).catch(() => {}); if (auto) this.pl.play().catch(() => {}); }).catch(() => toast("Vidéo Vimeo introuvable ou privée.")));
+    }
+  },
+  play(){ this.run(() => this.pl.play().catch(() => {})); }, pause(){ this.run(() => this.pl.pause().catch(() => {})); },
+  seek(s){ this.p = s; this.at = Date.now(); this.run(() => this.pl.setCurrentTime(s).catch(() => {})); },
+  pos(){ return this.on ? this.p + (Date.now() - this.at) / 1000 : this.p; }, playing(){ return this.on; }
+};
+// N'importe quel site : la page s'ouvre chez tout le monde, mais sa lecture ne peut pas être synchronisée
+AD.web = {
+  ready: true, ensure(){},
+  load(k){
+    const url = k.slice(4), box = $("w-web");
+    box.textContent = "";
+    const f = document.createElement("iframe");
+    f.allow = "autoplay; fullscreen; encrypted-media; picture-in-picture"; f.allowFullscreen = true;
+    f.referrerPolicy = "no-referrer";
+    // pas de navigation de notre page ni de fenêtres pop-up (pubs) depuis le site intégré
+    f.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-presentation allow-pointer-lock");
+    f.src = url;
+    box.append(f);
+  },
+  play(){}, pause(){}, seek(){}, pos(){ return 0; }, playing(){ return false; }
+};
+$("webopen").onclick = () => { if (vid && kindOf(vid) === "web") window.open(vid.slice(4), "_blank", "noopener"); };
 // YouTube
 AD.yt = {
   ready: false, ensure(){},
@@ -829,13 +937,13 @@ function playNow(key){
 }
 $("go").onclick = () => {
   const id = parseKey($("url").value);
-  if (!id) return toast("Lien non reconnu (YouTube, SoundCloud ou Spotify).");
+  if (!id) return toast("Lien non reconnu : colle une adresse qui commence par https://");
   $("url").value = "";
   playNow(id);
 };
 $("addq").onclick = () => {
   const id = parseKey($("url").value);
-  if (!id) return toast("Lien non reconnu (YouTube, SoundCloud ou Spotify).");
+  if (!id) return toast("Lien non reconnu : colle une adresse qui commence par https://");
   $("url").value = "";
   addQueue(id);
 };
@@ -845,7 +953,14 @@ document.addEventListener("paste", e => {
   if (!entered) return;
   const t = e.target;
   if (t && t.id === "name") return;
-  const id = parseKey(e.clipboardData && e.clipboardData.getData("text"));
+  const txt = (e.clipboardData && e.clipboardData.getData("text") || "").trim();
+  if (t && t.id === "joincode") return;
+  if (isOwnLink(txt) && /#[A-Z0-9]{12}$/i.test(txt)) {   // lien d'un autre salon collé n'importe où
+    e.preventDefault(); const code = txt.slice(-12).toUpperCase();
+    if (code !== room) location.hash = code;
+    return;
+  }
+  const id = parseKey(txt);
   if (!id) return;
   e.preventDefault();
   if (!vid) playNow(id); else { addQueue(id); }
@@ -918,7 +1033,7 @@ $("joincode").addEventListener("keydown", e => { if (e.key === "Enter") $("join"
 $("pastebtn").onclick = async () => {
   try {
     const id = parseKey(await navigator.clipboard.readText());
-    if (id) playNow(id); else toast("Le presse-papiers ne contient pas de lien YouTube, SoundCloud ou Spotify.");
+    if (id) playNow(id); else toast("Le presse-papiers ne contient pas de lien.");
   } catch { $("url").focus(); toast("Clique dans la barre puis fais Ctrl+V."); }
 };
 renderPeople(); renderQueue(); renderHistory(); renderFeed();
