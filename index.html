@@ -116,7 +116,7 @@ body.admin .who .kick{display:inline-flex}
 body.locked .app{filter:blur(8px);pointer-events:none;user-select:none}
 #cursors{position:fixed;inset:0;z-index:40;pointer-events:none;overflow:hidden}
 .cur{position:absolute;left:0;top:0;transition:opacity .25s;will-change:transform}
-#shield{position:fixed;left:0;top:0;width:0;height:0;z-index:30;cursor:default;display:none}
+#shield{position:fixed;left:0;top:0;width:0;height:0;z-index:30;cursor:crosshair;display:none;border-radius:var(--r);box-shadow:inset 0 0 0 2px rgba(255,255,255,.35)}
 .cur svg{display:block;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))}
 .cur span{position:absolute;left:13px;top:15px;white-space:nowrap;font:500 12px/16px Inter,"Segoe UI",system-ui,sans-serif;color:#fff;padding:2px 7px 3px;border-radius:2px 8px 8px 8px;box-shadow:0 1px 3px rgba(0,0,0,.35)}
 
@@ -193,6 +193,7 @@ body.embed #avatars{margin-right:auto}
       </div>
       <div class="under">
         <div id="now"></div>
+        <button class="btn sm" id="point" title="Montrer ton curseur aux autres sur la vidéo (Échap pour arrêter). Pendant ce temps, la vidéo n'est plus cliquable."><svg width="12" height="14" viewBox="0 0 16 20"><path d="M1.2 1.2v14.6l3.6-3.4 2.7 6 2.6-1.1-2.7-5.9h5L1.2 1.2z" fill="currentColor"/></svg><span id="pointlbl">Pointer sur la vidéo</span></button>
         <button class="btn sm" id="sync" title="Remettre tout le monde au même moment que toi">Resynchroniser</button>
       </div>
     </section>
@@ -215,7 +216,7 @@ body.embed #avatars{margin-right:auto}
       </div>
     </aside>
   </div>
-  <div class="ver">Watch Together · version 17.11.8</div>
+  <div class="ver">Watch Together · version 17.11.9</div>
 </div>
 <div id="toast" hidden></div>
 <div id="notice" hidden></div>
@@ -558,29 +559,34 @@ document.addEventListener("mousemove", trackMouse, { passive: true });
 const shield = $("shield");
 shield.addEventListener("mousemove", trackMouse, { passive: true });
 shield.addEventListener("mouseleave", () => send({ t: "cur", id: myId, off: true }));
-// Si YouTube a démarré sans le son (lecture auto), le premier clic sur la vidéo active le son au lieu de mettre en pause.
-shield.addEventListener("click", () => {
-  if (!(vid && kindOf(vid) === "yt" && A().ready)) return;
-  try { if (yt.isMuted()) { yt.unMute(); if (yt.getVolume() === 0) yt.setVolume(70); toast("Son activé."); return; } } catch {}
-  A().playing() ? A().pause() : A().play();
-});
+// Mode « pointer » : le voile ne se pose sur la vidéo que quand on le demande, sinon YouTube reste 100 % cliquable.
+let pointMode = false;
+function setPointMode(on){
+  pointMode = !!on && !!vid;
+  $("point").classList.toggle("primary", pointMode);
+  $("pointlbl").textContent = pointMode ? "Pointer : activé" : "Pointer sur la vidéo";
+  syncShield();
+  if (!pointMode) send({ t: "cur", id: myId, off: true });
+}
+$("point").onclick = () => setPointMode(!pointMode);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && pointMode) setPointMode(false); });
 // Tout clic sur la page autorise le son : on le réactive s'il était coupé par la lecture auto.
 document.addEventListener("pointerdown", () => { try { if (yt && ready && vid && kindOf(vid) === "yt" && yt.isMuted()) yt.unMute(); } catch {} }, true);
 // le voile est posé sur la page (pas dans le cadre) et recalé sur la vidéo, pour qu'aucun empilement du navigateur ne le passe sous le lecteur
 function syncShield(){
-  const on = vid && kindOf(vid) === "yt";
+  const on = pointMode && !!vid;
   shield.style.display = on ? "block" : "none";
   if (!on) return;
   const r = frameBox.getBoundingClientRect();
   shield.style.left = r.left + "px"; shield.style.top = r.top + "px";
-  shield.style.width = r.width + "px"; shield.style.height = Math.max(0, r.height - 52) + "px";
+  shield.style.width = r.width + "px"; shield.style.height = r.height + "px";
 }
 addEventListener("scroll", syncShield, { passive: true });
 addEventListener("resize", syncShield);
 try { new ResizeObserver(syncShield).observe(frameBox); } catch {}
 setInterval(syncShield, 700);
 // SoundCloud / Spotify : le lecteur occupe tout le cadre, la souris n'est pas visible → on masque notre curseur chez les autres
-frameBox.addEventListener("mouseenter", () => { if (!(vid && kindOf(vid) === "yt")) send({ t: "cur", id: myId, off: true }); });
+frameBox.addEventListener("mouseenter", () => { if (!pointMode) send({ t: "cur", id: myId, off: true }); });
 document.documentElement.addEventListener("mouseleave", () => send({ t: "cur", id: myId, off: true }));
 
 // ---- connexion directe entre navigateurs (WebRTC via PeerJS) ----
